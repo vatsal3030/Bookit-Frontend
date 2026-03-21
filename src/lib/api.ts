@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -31,5 +31,15 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Returns the server root URL (no /api suffix).
+ * e.g. VITE_API_URL = "http://localhost:5000/api" → "http://localhost:5000"
+ */
+export function getServerRoot(): string {
+  const base = API_BASE_URL;
+  // Strip any trailing path like /api, /api/v1, etc.
+  return base.replace(/\/api(\/v\d+)?$/, '');
+}
 
 export default api;

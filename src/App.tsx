@@ -17,7 +17,10 @@ import ProviderDashboard from './pages/dashboard/ProviderDashboard';
 import ManageServices from './pages/dashboard/ManageServices';
 import ManageSlots from './pages/dashboard/ManageSlots';
 import Profile from './pages/dashboard/Profile';
+import Messages from './pages/dashboard/Messages';
 import Notifications from './pages/dashboard/Notifications';
+import Payments from './pages/dashboard/Payments';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 function App() {
   return (
@@ -40,12 +43,17 @@ function App() {
                 <Route path="/dashboard/appointments" element={<ProtectedRoute><Appointments /></ProtectedRoute>} />
                 <Route path="/dashboard/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/dashboard/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                <Route path="/dashboard/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
                 <Route path="/checkout/:id" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
+                <Route path="/dashboard/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
 
                 {/* Protected - Provider only */}
                 <Route path="/dashboard/provider" element={<ProtectedRoute requiredRole="PROVIDER"><ProviderDashboard /></ProtectedRoute>} />
                 <Route path="/dashboard/services" element={<ProtectedRoute requiredRole="PROVIDER"><ManageServices /></ProtectedRoute>} />
                 <Route path="/dashboard/slots" element={<ProtectedRoute requiredRole="PROVIDER"><ManageSlots /></ProtectedRoute>} />
+
+                {/* Protected - Admin only */}
+                <Route path="/admin/dashboard" element={<ProtectedRoute requiredRole="ADMIN"><AdminDashboard /></ProtectedRoute>} />
               </Routes>
             </main>
             <Footer />

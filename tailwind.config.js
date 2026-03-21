@@ -7,42 +7,32 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: "hsl(var(--primary))",
-        "primary-foreground": "hsl(var(--primary-foreground))",
-      },
-      animation: {
-        spotlight: "spotlight 2s ease .75s 1 forwards",
-        aurora: "aurora 60s linear infinite",
-        shimmer: "shimmer 2s linear infinite",
-      },
-      keyframes: {
-        spotlight: {
-          "0%": {
-            opacity: 0,
-            transform: "translate(-72%, -62%) scale(0.5)",
-          },
-          "100%": {
-            opacity: 1,
-            transform: "translate(-50%,-40%) scale(1)",
-          },
+        // Bookit primary (blue)
+        primary: {
+          50:  '#EFF6FF',
+          100: '#DBEAFE',
+          200: '#BFDBFE',
+          300: '#93C5FD',
+          400: '#60A5FA',
+          500: '#3B82F6',
+          600: '#2563EB',   // PRIMARY
+          700: '#1D4ED8',
+          800: '#1E40AF',
+          900: '#1E3A8A',
+          DEFAULT: '#2563EB',
+          foreground: '#FFFFFF',
         },
-        aurora: {
-          from: { backgroundPosition: "50% 50%, 50% 50%" },
-          to: { backgroundPosition: "350% 50%, 350% 50%" },
-        },
-        shimmer: {
-          from: { backgroundPosition: "0 0" },
-          to: { backgroundPosition: "-200% 0" },
-        },
+        // Kept for backwards compat
+        background: '#F9FAFB',
+        foreground: '#111827',
       },
-      backgroundImage: {
-        'glass-gradient': 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0))',
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
-      boxShadow: {
-        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-      }
+      borderRadius: {
+        xl:  '12px',
+        '2xl': '16px',
+      },
     },
   },
   plugins: [],

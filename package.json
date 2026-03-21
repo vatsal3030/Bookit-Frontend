@@ -11,13 +11,18 @@
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
-    "axios": "^1.6.0",
+    "@react-oauth/google": "^0.13.4",
+    "@types/leaflet": "^1.9.21",
+    "axios": "^1.13.6",
     "clsx": "^2.0.0",
     "framer-motion": "^10.16.4",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.292.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.18.0",
+    "recharts": "^3.8.0",
     "tailwind-merge": "^2.0.0"
   },
   "devDependencies": {

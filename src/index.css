@@ -1,66 +1,163 @@
+/* ─── GOOGLE FONT ───────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ─── CSS VARIABLES ─────────────────────────── */
+/* ─── CSS VARIABLES (Light Theme) ──────────── */
 :root {
-  --primary: 230 80% 56%;
-  --primary-foreground: 0 0% 100%;
-  --background: 222 47% 6%;
-  --foreground: 0 0% 95%;
+  /* Primary Blue */
+  --blue-50:  #EFF6FF;
+  --blue-100: #DBEAFE;
+  --blue-200: #BFDBFE;
+  --blue-500: #3B82F6;
+  --blue-600: #2563EB;
+  --blue-700: #1D4ED8;
+
+  /* Semantic */
+  --color-primary:   #2563EB;
+  --color-primary-h: #1D4ED8;
+  --color-success:   #16A34A;
+  --color-success-bg:#DCFCE7;
+  --color-danger:    #DC2626;
+  --color-danger-bg: #FEE2E2;
+  --color-warning:   #D97706;
+  --color-warning-bg:#FEF3C7;
+
+  /* Backgrounds */
+  --bg-body:    #F9FAFB;
+  --bg-white:   #FFFFFF;
+  --bg-surface: #F3F4F6;
+
+  /* Text */
+  --text-main:    #111827;
+  --text-muted:   #6B7280;
+  --text-subtle:  #9CA3AF;
+
+  /* Border */
+  --border:       #E5E7EB;
+  --border-focus: #2563EB;
+
+  /* Navbar height token */
+  --navbar-h: 64px;
 }
 
-/* ─── BASE STYLES ───────────────────────────── */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* ─── BASE ───────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 body {
+  margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--bg-body);
+  color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
 }
 
-/* ─── SCROLLBAR ─────────────────────────────── */
+/* ─── SCROLLBAR ─────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
-/* ─── GLASS EFFECTS ─────────────────────────── */
+/* ─── FOCUS RING ────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── SELECTION ─────────────────────────── */
+::selection { background: var(--blue-200); color: var(--color-primary); }
+
+/* ─── COMPONENTS ────────────────────────── */
 @layer components {
+
+  /* Card */
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+  }
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-md hover:border-blue-200;
+  }
+
+  /* Removed glass-panel/glass-card — keeping for backwards compat but light themed */
   .glass-panel {
-    @apply rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl;
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
   }
   .glass-card {
-    @apply rounded-xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-md transition-all duration-300 hover:border-white/[0.15];
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-200 hover:shadow-md hover:border-blue-200;
+  }
+
+  /* Badge base */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  /* Page wrapper (accounts for fixed navbar) */
+  .page-wrapper {
+    @apply pt-16 min-h-screen;
+  }
+
+  /* Form */
+  .form-input {
+    @apply w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm
+           placeholder:text-gray-400
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+           disabled:bg-gray-50 disabled:cursor-not-allowed
+           transition-colors;
+  }
+
+  /* Section heading */
+  .section-title {
+    @apply text-2xl font-bold text-gray-900;
+  }
+  .section-sub {
+    @apply text-sm text-gray-500 mt-0.5;
+  }
+
+  /* Divider */
+  .divider {
+    @apply border-t border-gray-200 my-4;
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700
+           hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer;
+  }
+  .nav-item-active {
+    @apply nav-item bg-blue-50 text-blue-700;
   }
 }
 
-/* ─── SELECTION ─────────────────────────────── */
-::selection {
-  background: hsl(var(--primary) / 0.3);
-  color: white;
-}
-
-/* ─── DATE AND TIME INPUT FIXES FOR DARK THEME */
+/* ─── DATE/TIME PICKERS ─────────────────── */
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.6);
+  opacity: 0.5;
   cursor: pointer;
 }
 
-/* ─── ANIMATE PULSE SLOWER ──────────────────── */
-.animate-pulse {
-  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* ─── ANIMATIONS ────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+.animate-fadeIn { animation: fadeIn 0.2s ease-out; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50%       { opacity: 0.5; }
 }
+.animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+
+/* ─── STATUS COLORS ─────────────────────── */
+.status-pending   { @apply bg-yellow-50 text-yellow-700 border border-yellow-200; }
+.status-confirmed { @apply bg-blue-50 text-blue-700 border border-blue-200; }
+.status-completed { @apply bg-green-50 text-green-700 border border-green-200; }
+.status-cancelled { @apply bg-red-50 text-red-700 border border-red-200; }

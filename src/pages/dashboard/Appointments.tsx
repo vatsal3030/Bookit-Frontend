@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Clock, Star, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Calendar, Clock, Star, Search, RefreshCw, ChevronLeft, ChevronRight, XCircle } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { ListSkeleton } from '../../components/ui/skeleton';
@@ -10,44 +9,83 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
+import CustomerAnalytics from './CustomerAnalytics';
 
-const TABS = ['All', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'];
+const STATUS_TABS = ['All', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'RESCHEDULED', 'NO_SHOW'] as const;
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('All');
-  const [cancelModal, setCancelModal] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [cancelling, setCancelling] = useState(false);
-  const [reviewModal, setReviewModal] = useState<any>(null);
-  const [reviewData, setReviewData] = useState({ rating: 5, comment: '' });
-  const [submittingReview, setSubmittingReview] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string>('All');
+  const [view, setView] = useState<'appointments' | 'analytics'>('appointments');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<any>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  useEffect(() => {
-    fetchAppointments();
-  }, []);
+  // Cancel modal
+  const [cancelModal, setCancelModal] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
 
-  const fetchAppointments = async () => {
+  // Reschedule modal
+  const [rescheduleModal, setRescheduleModal] = useState<any>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleSlots, setRescheduleSlots] = useState<any[]>([]);
+  const [selectedNewSlot, setSelectedNewSlot] = useState<string | null>(null);
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+
+  // Review modal
+  const [reviewModal, setReviewModal] = useState<any>(null);
+  const [reviewData, setReviewData] = useState({ rating: 5, comment: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const fetchAppointments = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await api.get('/appointments');
-      setAppointments(res.data.appointments || res.data || []);
+      const params: any = { page, limit: 15 };
+      if (activeFilter !== 'All') params.status = activeFilter;
+      const res = await api.get('/appointments', { params });
+      setAppointments(res.data.appointments || []);
+      setPagination(res.data.pagination || null);
     } catch {
       showToast('Failed to load appointments', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, activeFilter]);
+
+  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+
+  // Keyboard: Escape closes modals
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setCancelModal(null); setReviewModal(null); setRescheduleModal(null); }
+    };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []);
+
+  // Fetch available slots when reschedule date changes
+  useEffect(() => {
+    if (!rescheduleDate || !rescheduleModal) return;
+    setSlotsLoading(true);
+    api.get(`/providers/${rescheduleModal.providerId}/slots`, { params: { date: rescheduleDate } })
+      .then(res => setRescheduleSlots((res.data.slots || []).filter((s: any) => s.isAvailable)))
+      .catch(() => setRescheduleSlots([]))
+      .finally(() => setSlotsLoading(false));
+  }, [rescheduleDate, rescheduleModal]);
 
   const handleCancel = async () => {
-    if (!cancelModal) return;
+    if (!cancelModal || !cancelReason.trim()) { showToast('Please provide a cancellation reason', 'error'); return; }
     setCancelling(true);
     try {
-      await api.patch(`/appointments/${cancelModal}/status`, { status: 'CANCELLED', reason: cancelReason });
-      showToast('Appointment cancelled', 'success');
+      const res = await api.patch(`/appointments/${cancelModal}/cancel`, { reason: cancelReason });
+      const refund = res.data.refundAmount;
+      showToast(`Appointment cancelled${refund > 0 ? `. Refund: ₹${refund.toFixed(2)}` : ''}`, 'success');
       setCancelModal(null);
       setCancelReason('');
       fetchAppointments();
@@ -58,15 +96,30 @@ export default function Appointments() {
     }
   };
 
+  const handleReschedule = async () => {
+    if (!rescheduleModal || !selectedNewSlot) { showToast('Please pick a new time slot', 'error'); return; }
+    setRescheduling(true);
+    try {
+      await api.patch(`/appointments/${rescheduleModal.id}/reschedule`, { newTimeSlotId: selectedNewSlot, reason: rescheduleReason });
+      showToast('Appointment rescheduled!', 'success');
+      setRescheduleModal(null);
+      setRescheduleDate('');
+      setRescheduleSlots([]);
+      setSelectedNewSlot(null);
+      setRescheduleReason('');
+      fetchAppointments();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Reschedule failed', 'error');
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
   const handleSubmitReview = async () => {
     if (!reviewModal) return;
     setSubmittingReview(true);
     try {
-      await api.post('/reviews', {
-        appointmentId: reviewModal.id,
-        rating: reviewData.rating,
-        comment: reviewData.comment,
-      });
+      await api.post('/reviews', { appointmentId: reviewModal.id, rating: reviewData.rating, comment: reviewData.comment });
       showToast('Review submitted! Thank you.', 'success');
       setReviewModal(null);
       setReviewData({ rating: 5, comment: '' });
@@ -78,166 +131,272 @@ export default function Appointments() {
     }
   };
 
-  const filtered = activeTab === 'All' ? appointments : appointments.filter(a => a.status === activeTab);
-
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 min-h-[85vh]">
-      <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">My Appointments</h1>
-          <p className="text-gray-400 text-sm mt-1">{appointments.length} total appointments</p>
+    <div className="pt-16 min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">My Appointments</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{pagination?.total || appointments.length} total</p>
+          </div>
+          <div className="flex gap-2">
+            {user?.role === 'CUSTOMER' && (
+              <div className="flex gap-1 p-1 bg-white border border-gray-200 rounded-lg">
+                <button
+                  onClick={() => setView('appointments')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'appointments' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  Appointments
+                </button>
+                <button
+                  onClick={() => setView('analytics')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'analytics' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  My Analytics
+                </button>
+              </div>
+            )}
+            {user?.role === 'PROVIDER' && (
+              <Button variant="outline" onClick={() => navigate('/dashboard/provider')}>Provider Dashboard</Button>
+            )}
+            <Button variant="primary" onClick={() => navigate('/search')}>+ New Booking</Button>
+          </div>
         </div>
-        {user?.role === 'PROVIDER' && (
-          <Button onClick={() => navigate('/dashboard/provider')} variant="glass">Provider Dashboard</Button>
+
+        {view === 'analytics' ? (
+          <CustomerAnalytics />
+        ) : (
+          <>
+            {/* Filter Tabs */}
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+              {STATUS_TABS.map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => { setActiveFilter(tab); setPage(1); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-colors border ${
+                    activeFilter === tab
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {tab === 'All' ? 'All' : tab.charAt(0) + tab.slice(1).toLowerCase().replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+
+            {/* List */}
+            {loading ? (
+              <ListSkeleton rows={4} />
+            ) : appointments.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+                <Calendar className="w-14 h-14 mx-auto mb-3 text-gray-300" />
+                <h3 className="font-semibold text-gray-700 mb-1">No appointments found</h3>
+                <p className="text-sm text-gray-400 mb-5">
+                  {activeFilter === 'All' ? "You haven't booked any appointments yet." : `No ${activeFilter.toLowerCase()} appointments.`}
+                </p>
+                <Button variant="primary" onClick={() => navigate('/search')}>
+                  <Search className="w-4 h-4" /> Find Services
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {appointments.map(appt => (
+                  <div
+                    key={appt.id}
+                    className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 hover:shadow-sm transition-all"
+                    tabIndex={0}
+                    role="article"
+                    aria-label={`Appointment: ${appt.service?.name}`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{appt.service?.name || 'Service'}</h3>
+                          <Badge status={appt.status} />
+                          {appt.confirmationNo && (
+                            <span className="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">#{appt.confirmationNo}</span>
+                          )}
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-500 mb-2">
+                          {user?.role === 'CUSTOMER'
+                            ? `With ${appt.provider?.user?.name || 'Provider'}`
+                            : `Customer: ${appt.customer?.name || 'Unknown'}`}
+                        </p>
+                        <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-gray-500">
+                          <span className="flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                            {new Date(appt.timeSlot?.date || appt.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-gray-400" />
+                            {new Date(appt.timeSlot?.startTime || appt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="font-semibold text-gray-900">₹{appt.totalAmount || appt.amount}</span>
+                          {appt.payment?.status && (
+                            <Badge status={appt.payment.status === 'SUCCESS' ? 'Paid' : appt.payment.status === 'REFUNDED' ? 'Refunded' : 'Unpaid'} />
+                          )}
+                        </div>
+                        {appt.cancellationReason && (
+                          <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><XCircle className="w-3 h-3" /> {appt.cancellationReason}</p>
+                        )}
+                        {appt.rescheduleReason && (
+                          <p className="text-xs text-blue-500 mt-1 flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Rescheduled: {appt.rescheduleReason}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                        {appt.status === 'PENDING' && !appt.payment && (
+                          <Button variant="primary" size="sm" onClick={() => navigate(`/checkout/${appt.id}`)}>Pay Now</Button>
+                        )}
+                        {appt.status === 'COMPLETED' && !appt.review && user?.role === 'CUSTOMER' && (
+                          <Button variant="outline" size="sm" onClick={() => setReviewModal(appt)}>
+                            <Star className="w-3.5 h-3.5" /> Review
+                          </Button>
+                        )}
+                        {['PENDING', 'CONFIRMED'].includes(appt.status) && appt.rescheduleAllowed !== false && (
+                          <Button variant="outline" size="sm" onClick={() => setRescheduleModal(appt)}>
+                            <RefreshCw className="w-3.5 h-3.5" /> Reschedule
+                          </Button>
+                        )}
+                        {['PENDING', 'CONFIRMED'].includes(appt.status) && (
+                          <Button variant="danger" size="sm" onClick={() => setCancelModal(appt.id)}>Cancel</Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Pagination */}
+                {pagination && pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 pt-4">
+                    <button
+                      disabled={page <= 1}
+                      onClick={() => setPage(p => p - 1)}
+                      className="p-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-sm text-gray-600 font-medium">
+                      Page {pagination.page} of {pagination.totalPages}
+                    </span>
+                    <button
+                      disabled={page >= pagination.totalPages}
+                      onClick={() => setPage(p => p + 1)}
+                      className="p-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Tab Filters */}
-      <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-              activeTab === tab
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
-            }`}
-          >
-            {tab === 'All' ? 'All' : tab.charAt(0) + tab.slice(1).toLowerCase()}
-            {tab !== 'All' && (
-              <span className="ml-1.5 text-xs opacity-60">
-                ({appointments.filter(a => a.status === tab).length})
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Appointment List */}
-      {loading ? (
-        <ListSkeleton rows={4} />
-      ) : filtered.length === 0 ? (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-zinc-950 border border-white/10 rounded-2xl p-12 text-center shadow-2xl">
-          <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-          <h3 className="text-xl font-semibold text-gray-400 mb-2">No appointments found</h3>
-          <p className="text-gray-500 mb-6">
-            {activeTab === 'All' ? "You haven't booked any appointments yet." : `No ${activeTab.toLowerCase()} appointments.`}
-          </p>
-          <Button onClick={() => navigate('/search')}>Find Services</Button>
-        </motion.div>
-      ) : (
-        <div className="space-y-4">
-          <AnimatePresence>
-            {filtered.map((appt, i) => (
-              <motion.div
-                key={appt.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ delay: i * 0.05 }}
-                className="relative overflow-hidden bg-zinc-950 border border-white/10 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all hover:border-white/20 group"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.02] to-purple-500/[0.02] pointer-events-none"></div>
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <h3 className="text-lg font-semibold text-white">{appt.service?.name || 'Service'}</h3>
-                      <Badge status={appt.status} />
-                      {appt.confirmationNo && (
-                        <span className="text-xs text-gray-500 font-mono">#{appt.confirmationNo}</span>
-                      )}
-                    </div>
-
-                    <p className="text-sm text-gray-400 mb-3">
-                      {user?.role === 'CUSTOMER'
-                        ? `Provider: ${appt.provider?.user?.name || 'Unknown'}`
-                        : `Customer: ${appt.customer?.name || 'Unknown'}`}
-                    </p>
-
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-300">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4 text-gray-500" />
-                        {new Date(appt.timeSlot?.date || appt.createdAt).toLocaleDateString()}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4 text-gray-500" />
-                        {new Date(appt.timeSlot?.startTime || appt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="font-semibold text-blue-400">₹{appt.amount}</span>
-                      {appt.payment && <Badge status={appt.payment.status} />}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 shrink-0">
-                    {appt.status === 'PENDING' && !appt.payment && (
-                      <Button onClick={() => navigate(`/checkout/${appt.id}`)} className="bg-gradient-to-r from-blue-600 to-purple-600">
-                        Pay Now
-                      </Button>
-                    )}
-                    {appt.status === 'COMPLETED' && !appt.review && user?.role === 'CUSTOMER' && (
-                      <Button variant="glass" onClick={() => setReviewModal(appt)}>
-                        <Star className="w-4 h-4 mr-1" /> Review
-                      </Button>
-                    )}
-                    {['PENDING', 'CONFIRMED'].includes(appt.status) && (
-                      <Button variant="outline" className="text-red-400 border-red-500/30 hover:bg-red-500/10"
-                        onClick={() => setCancelModal(appt.id)}>
-                        Cancel
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
-
       {/* Cancel Modal */}
       <Modal isOpen={!!cancelModal} onClose={() => setCancelModal(null)} title="Cancel Appointment">
-        <p className="text-gray-400 text-sm mb-4">Are you sure you want to cancel this appointment?</p>
+        <p className="text-sm text-gray-500 mb-2">This action cannot be undone.</p>
+        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+          Cancellations more than 24h before your slot receive a full refund. Later cancellations incur a 50% charge.
+        </p>
         <Input
-          placeholder="Reason for cancellation (optional)"
+          label="Reason (required)"
+          placeholder="Let us know why you're cancelling"
           value={cancelReason}
-          onChange={(e) => setCancelReason(e.target.value)}
-          className="mb-4"
+          onChange={e => setCancelReason(e.target.value)}
+          className="mb-5"
         />
-        <div className="flex gap-3 justify-end">
+        <div className="flex gap-2 justify-end">
           <Button variant="ghost" onClick={() => setCancelModal(null)}>Keep Appointment</Button>
-          <Button onClick={handleCancel} disabled={cancelling} className="bg-red-600 hover:bg-red-700">
-            {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Cancel'}
-          </Button>
+          <Button variant="danger" loading={cancelling} onClick={handleCancel} disabled={!cancelReason.trim()}>Confirm Cancel</Button>
+        </div>
+      </Modal>
+
+      {/* Reschedule Modal */}
+      <Modal isOpen={!!rescheduleModal} onClose={() => { setRescheduleModal(null); setRescheduleDate(''); setRescheduleSlots([]); setSelectedNewSlot(null); setRescheduleReason(''); }} title="Reschedule Appointment">
+        <p className="text-sm text-gray-500 mb-4">Pick a new date and time slot to reschedule your appointment.</p>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">New Date</label>
+          <input
+            type="date"
+            value={rescheduleDate}
+            min={new Date().toISOString().split('T')[0]}
+            onChange={e => { setRescheduleDate(e.target.value); setSelectedNewSlot(null); }}
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        {rescheduleDate && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Available Slots</label>
+            {slotsLoading ? (
+              <p className="text-sm text-gray-400">Loading slots...</p>
+            ) : rescheduleSlots.length === 0 ? (
+              <p className="text-sm text-gray-400">No available slots for this date.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {rescheduleSlots.map(slot => (
+                  <button
+                    key={slot.id}
+                    onClick={() => setSelectedNewSlot(slot.id)}
+                    className={`px-2 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                      selectedNewSlot === slot.id
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <Input
+          label="Reason (optional)"
+          placeholder="Why are you rescheduling?"
+          value={rescheduleReason}
+          onChange={e => setRescheduleReason(e.target.value)}
+          className="mb-5"
+        />
+        <div className="flex gap-2 justify-end">
+          <Button variant="ghost" onClick={() => setRescheduleModal(null)}>Cancel</Button>
+          <Button variant="primary" loading={rescheduling} onClick={handleReschedule} disabled={!selectedNewSlot}>Confirm Reschedule</Button>
         </div>
       </Modal>
 
       {/* Review Modal */}
       <Modal isOpen={!!reviewModal} onClose={() => setReviewModal(null)} title="Leave a Review">
         <div className="mb-4">
-          <label className="text-sm text-gray-400 mb-2 block">Rating</label>
-          <div className="flex gap-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Your Rating</label>
+          <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map(n => (
-              <button key={n} onClick={() => setReviewData(prev => ({ ...prev, rating: n }))}>
-                <Star className={`w-8 h-8 transition-colors ${n <= reviewData.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`} />
+              <button
+                key={n}
+                onClick={() => setReviewData(p => ({ ...p, rating: n }))}
+                aria-label={`${n} stars`}
+                className="focus-visible:outline-none"
+              >
+                <Star className={`w-8 h-8 transition-colors ${n <= reviewData.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
               </button>
             ))}
           </div>
         </div>
-        <div className="mb-6">
-          <label className="text-sm text-gray-400 mb-2 block">Comment (optional)</label>
+        <div className="mb-5">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
           <textarea
             rows={3}
             value={reviewData.comment}
-            onChange={(e) => setReviewData(prev => ({ ...prev, comment: e.target.value }))}
+            onChange={e => setReviewData(p => ({ ...p, comment: e.target.value }))}
             placeholder="How was your experience?"
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
           />
         </div>
-        <div className="flex gap-3 justify-end">
+        <div className="flex gap-2 justify-end">
           <Button variant="ghost" onClick={() => setReviewModal(null)}>Cancel</Button>
-          <Button onClick={handleSubmitReview} disabled={submittingReview}>
-            {submittingReview ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit Review'}
-          </Button>
+          <Button variant="success" loading={submittingReview} onClick={handleSubmitReview}>Submit Review</Button>
         </div>
       </Modal>
     </div>

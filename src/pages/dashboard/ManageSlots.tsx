@@ -1,215 +1,287 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useCallback } from 'react';
+import { Calendar, Clock, Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Info, Tag, AlignLeft } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import Modal from '../../components/ui/modal';
 import { useToast } from '../../components/ui/toast';
-import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
-import { Plus, Trash2, Loader2, Clock, Calendar } from 'lucide-react';
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
+function getFirstDayOfWeek(year: number, month: number) { return new Date(year, month, 1).getDay(); }
+function toDateStr(d: Date) { return d.toISOString().split('T')[0]; }
 
 export default function ManageSlots() {
+  const { showToast } = useToast();
+  const [provider, setProvider] = useState<any>(null);
+  const [services, setServices] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [providerId, setProviderId] = useState('');
-  const [date, setDate] = useState('');
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('09:30');
-  const { showToast } = useToast();
+  const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Calendar state
+  const today = new Date();
+  const [calMonth, setCalMonth] = useState(today.getMonth());
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [selectedDate, setSelectedDate] = useState(toDateStr(today));
+
+  // Add slot modal
+  const [showModal, setShowModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '' });
+
+  // Fetch provider profile
   useEffect(() => {
-    const loadProfile = async () => {
+    (async () => {
       try {
-        const res = await api.get('/auth/profile');
-        const pid = res.data.user?.providerProfile?.id;
-        if (pid) {
-          setProviderId(pid);
-          // Load today's slots
-          const today = new Date().toISOString().split('T')[0];
-          setDate(today);
-          const slotsRes = await api.get(`/providers/${pid}/slots`, { params: { date: today } });
-          setSlots(slotsRes.data.slots || []);
-        }
-      } catch {
-        showToast('Failed to load slots', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadProfile();
+        const res = await api.get('/providers/dashboard/stats');
+        setProvider(res.data.stats);
+        // also fetch services
+        const profileRes = await api.get(`/providers/${res.data.stats?.providerId || ''}`);
+        setServices(profileRes.data.provider?.services || []);
+      } catch {}
+      setLoading(false);
+    })();
   }, []);
 
-  const fetchSlots = async (d: string) => {
-    if (!providerId) return;
+  // Fetch slots for selected date
+  const fetchSlots = useCallback(async () => {
+    if (!selectedDate) return;
+    setLoading(true);
     try {
-      const res = await api.get(`/providers/${providerId}/slots`, { params: { date: d } });
+      // We need the provider ID - get it from stats
+      const statsRes = await api.get('/providers/dashboard/stats');
+      const pid = statsRes.data.stats?.providerId;
+      if (!pid) { setLoading(false); return; }
+      const res = await api.get(`/providers/${pid}/slots`, { params: { date: selectedDate } });
       setSlots(res.data.slots || []);
-    } catch {}
-  };
+    } catch { setSlots([]); }
+    finally { setLoading(false); }
+  }, [selectedDate]);
 
-  const handleDateChange = (d: string) => {
-    setDate(d);
-    fetchSlots(d);
-  };
+  useEffect(() => { fetchSlots(); }, [fetchSlots]);
 
   const handleAddSlot = async () => {
-    if (!date || !startTime || !endTime) {
-      showToast('Please fill all fields', 'error');
-      return;
-    }
-    setSaving(true);
+    if (!form.startTime || !form.endTime) { showToast('Start and end times are required', 'error'); return; }
+    setCreating(true);
     try {
-      const slotDate = new Date(date);
-      const [sh, sm] = startTime.split(':').map(Number);
-      const [eh, em] = endTime.split(':').map(Number);
-      const start = new Date(slotDate);
-      start.setHours(sh, sm, 0, 0);
-      const end = new Date(slotDate);
-      end.setHours(eh, em, 0, 0);
-
+      const start = new Date(`${selectedDate}T${form.startTime}`);
+      const end = new Date(`${selectedDate}T${form.endTime}`);
       await api.post('/providers/slots', {
-        date: slotDate.toISOString(),
+        date: selectedDate,
         startTime: start.toISOString(),
         endTime: end.toISOString(),
+        title: form.title || undefined,
+        description: form.description || undefined,
+        serviceId: form.serviceId || undefined,
       });
       showToast('Slot added!', 'success');
-      fetchSlots(date);
-    } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to add slot', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleBulkAdd = async () => {
-    if (!date) {
-      showToast('Please select a date first', 'error');
-      return;
-    }
-    setSaving(true);
-    try {
-      const slotDate = new Date(date);
-      const hourSlots = [];
-      for (let h = 9; h <= 17; h++) {
-        const start = new Date(slotDate);
-        start.setHours(h, 0, 0, 0);
-        const end = new Date(slotDate);
-        end.setHours(h, 30, 0, 0);
-        hourSlots.push({ startTime: start.toISOString(), endTime: end.toISOString() });
-      }
-      await api.post('/providers/slots/bulk', { date: slotDate.toISOString(), slots: hourSlots });
-      showToast('Bulk slots added (9 AM - 5:30 PM)!', 'success');
-      fetchSlots(date);
-    } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to add slots', 'error');
-    } finally {
-      setSaving(false);
-    }
+      setShowModal(false);
+      setForm({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '' });
+      fetchSlots();
+    } catch (err: any) { showToast(err.response?.data?.error || 'Failed to add slot', 'error'); }
+    finally { setCreating(false); }
   };
 
   const handleDelete = async (id: string) => {
+    setDeleting(id);
     try {
       await api.delete(`/providers/slots/${id}`);
       showToast('Slot deleted', 'success');
-      fetchSlots(date);
-    } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to delete slot', 'error');
-    }
+      fetchSlots();
+    } catch (err: any) { showToast(err.response?.data?.error || 'Failed to delete', 'error'); }
+    finally { setDeleting(null); }
+  };
+
+  const daysInMonth = getDaysInMonth(calYear, calMonth);
+  const firstDay = getFirstDayOfWeek(calYear, calMonth);
+  const todayStr = toDateStr(today);
+
+  const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(calMonth - 1); };
+  const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else setCalMonth(calMonth + 1); };
+
+  const handleCalDateClick = (day: number) => {
+    const d = new Date(calYear, calMonth, day);
+    setSelectedDate(toDateStr(d));
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 min-h-[85vh]">
-      <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Manage Time Slots</h1>
-          <p className="text-gray-400 text-sm mt-1">Add and manage your available time slots</p>
-        </div>
-      </div>
-
-      {/* Date Selector + Add Slot */}
-      <div className="relative overflow-hidden bg-zinc-950 border border-white/10 rounded-2xl p-6 mb-8 shadow-2xl">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 pointer-events-none"></div>
-        <h3 className="text-lg font-medium text-white mb-4">Add Time Slot</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+    <div className="pt-16 min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => handleDateChange(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
-              className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            />
+            <h1 className="text-2xl font-bold text-gray-900">Manage Availability</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Add, view, or remove your time slots</p>
           </div>
-          <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">Start Time</label>
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">End Time</label>
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleAddSlot} disabled={saving} className="flex-1">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
-            </Button>
-            <Button variant="glass" onClick={handleBulkAdd} disabled={saving} className="flex-1">
-              Bulk Add
-            </Button>
-          </div>
+          <Button variant="primary" onClick={() => setShowModal(true)}>
+            <Plus className="w-4 h-4" /> Add Slot
+          </Button>
         </div>
-      </div>
 
-      {/* Slots Grid */}
-      <div className="flex items-center gap-3 mb-5">
-        <Calendar className="w-5 h-5 text-blue-400" />
-        <h2 className="text-xl font-semibold text-white">
-          Slots for {date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : 'Select a date'}
-        </h2>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-10"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-500" /></div>
-      ) : slots.length === 0 ? (
-        <div className="bg-zinc-950 border border-white/10 rounded-2xl p-8 text-center text-gray-500 shadow-xl">
-          <Clock className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p>No slots for this date. Add some above!</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {slots.map(slot => (
-            <motion.div key={slot.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              className={`bg-zinc-950 border ${slot.isAvailable ? 'border-white/10 hover:border-white/30' : 'border-white/5 bg-zinc-950/50'} rounded-2xl p-4 text-center relative group shadow-lg transition-all ${slot.isAvailable ? '' : 'opacity-40'}`}
-            >
-              <p className="text-sm font-medium text-white">
-                {new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-              <p className="text-xs text-gray-500">
-                to {new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-              <span className={`text-[10px] mt-1 inline-block px-2 py-0.5 rounded-full ${slot.isAvailable ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                {slot.isAvailable ? 'Available' : 'Booked'}
-              </span>
-              {slot.isAvailable && (
-                <button onClick={() => handleDelete(slot.id)}
-                  className="absolute top-1 right-1 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-red-400 transition-all">
-                  <Trash2 className="w-3 h-3" />
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Calendar */}
+          <div className="lg:col-span-2">
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Previous month">
+                  <ChevronLeft className="w-4 h-4 text-gray-500" />
                 </button>
+                <p className="text-sm font-semibold text-gray-900">{MONTH_NAMES[calMonth]} {calYear}</p>
+                <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Next month">
+                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {DAY_LABELS.map(d => (
+                  <div key={d} className="text-center text-[10px] font-semibold text-gray-400 uppercase py-1">{d}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const day = i + 1;
+                  const dateStr = toDateStr(new Date(calYear, calMonth, day));
+                  const isToday = dateStr === todayStr;
+                  const isSelected = dateStr === selectedDate;
+
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => handleCalDateClick(day)}
+                      className={`aspect-square rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
+                        isSelected ? 'bg-blue-600 text-white shadow-sm' :
+                        isToday ? 'bg-blue-50 text-blue-700 font-bold' :
+                        'text-gray-600 hover:bg-gray-100'
+                      }`}
+                      aria-label={`${day} ${MONTH_NAMES[calMonth]} ${calYear}`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Slots for selected date */}
+          <div className="lg:col-span-3">
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-gray-900">
+                  Slots for {new Date(selectedDate + 'T00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </h2>
+                <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
+                  <Plus className="w-3.5 h-3.5" /> Add
+                </Button>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center gap-2 text-gray-400 text-sm py-8 justify-center"><Loader2 className="w-4 h-4 animate-spin" /> Loading...</div>
+              ) : slots.length === 0 ? (
+                <div className="text-center py-10">
+                  <Calendar className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm text-gray-400">No slots for this date.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {slots.map(slot => (
+                    <div key={slot.id} className={`flex items-start justify-between gap-3 p-3 rounded-xl border transition-colors ${slot.isAvailable ? 'border-green-200 bg-green-50/30' : 'border-amber-200 bg-amber-50/30'}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-gray-400" />
+                            {new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${slot.isAvailable ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {slot.isAvailable ? 'Available' : 'Booked'}
+                          </span>
+                        </div>
+                        {slot.title && <p className="text-xs font-medium text-gray-700 flex items-center gap-1"><Tag className="w-3 h-3 text-gray-400" /> {slot.title}</p>}
+                        {slot.description && <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><AlignLeft className="w-3 h-3" /> {slot.description}</p>}
+                        {slot.service && <p className="text-[10px] text-blue-600 mt-0.5">Service: {slot.service.name}</p>}
+                      </div>
+                      {slot.isAvailable && (
+                        <button
+                          onClick={() => handleDelete(slot.id)}
+                          disabled={deleting === slot.id}
+                          className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors flex-shrink-0"
+                          aria-label="Delete slot"
+                        >
+                          {deleting === slot.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
-            </motion.div>
-          ))}
+            </div>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Add Slot Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={`Add Slot for ${new Date(selectedDate + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+              <input
+                type="time"
+                value={form.startTime}
+                onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+              <input
+                type="time"
+                value={form.endTime}
+                onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <Input
+            label="Title (optional)"
+            placeholder="e.g. Morning Consultation"
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+            <textarea
+              rows={2}
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Any additional details about this slot"
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+          {services.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Link to Service (optional)</label>
+              <select
+                value={form.serviceId}
+                onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— General availability —</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} (₹{s.baseFee})</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 justify-end mt-6">
+          <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
+          <Button variant="primary" loading={creating} onClick={handleAddSlot}>Add Slot</Button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../../components/ui/button';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
@@ -11,6 +10,14 @@ const typeIcons: Record<string, any> = {
   REVIEW: Star,
   REMINDER: Bell,
   SYSTEM: Info,
+};
+
+const typeColor: Record<string, string> = {
+  BOOKING: 'bg-blue-50 text-blue-600',
+  PAYMENT: 'bg-green-50 text-green-600',
+  REVIEW: 'bg-yellow-50 text-yellow-600',
+  REMINDER: 'bg-purple-50 text-purple-600',
+  SYSTEM: 'bg-gray-100 text-gray-600',
 };
 
 export default function Notifications() {
@@ -36,79 +43,79 @@ export default function Notifications() {
   const handleMarkAllRead = async () => {
     try {
       await api.patch('/notifications/read-all');
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setNotifications(p => p.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
-      showToast('All marked as read', 'success');
-    } catch {
-      showToast('Failed to update', 'error');
-    }
+      showToast('All notifications marked as read', 'success');
+    } catch { showToast('Failed to update', 'error'); }
   };
 
   const handleMarkRead = async (id: string) => {
     try {
       await api.patch(`/notifications/${id}/read`);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setNotifications(p => p.map(n => n.id === id ? { ...n, isRead: true } : n));
+      setUnreadCount(p => Math.max(0, p - 1));
     } catch {}
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 min-h-[85vh]">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Notifications</h1>
-          {unreadCount > 0 && <p className="text-sm text-blue-400 mt-1">{unreadCount} unread</p>}
+    <div className="pt-16 min-h-screen bg-gray-50">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}</p>
+          </div>
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
+              <CheckCheck className="w-4 h-4" /> Mark all read
+            </Button>
+          )}
         </div>
-        {unreadCount > 0 && (
-          <Button variant="glass" onClick={handleMarkAllRead}>
-            <CheckCheck className="w-4 h-4 mr-2" /> Mark all read
-          </Button>
-        )}
-      </div>
 
-      {loading ? (
-        <div className="text-center py-20"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-500" /></div>
-      ) : notifications.length === 0 ? (
-        <div className="glass-panel p-12 text-center">
-          <Bell className="w-12 h-12 mx-auto mb-4 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-400 mb-2">No notifications</h3>
-          <p className="text-gray-500">You're all caught up!</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <AnimatePresence>
-            {notifications.map((n, i) => {
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+            <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <h3 className="font-semibold text-gray-700 mb-1">No notifications</h3>
+            <p className="text-sm text-gray-400">You're all caught up!</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {notifications.map(n => {
               const Icon = typeIcons[n.type] || Bell;
+              const iconStyle = typeColor[n.type] || 'bg-gray-100 text-gray-600';
               return (
-                <motion.div
+                <div
                   key={n.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.03 }}
                   onClick={() => !n.isRead && handleMarkRead(n.id)}
-                  className={`glass-card p-4 flex items-start gap-4 cursor-pointer transition-colors ${
-                    !n.isRead ? 'bg-blue-500/5 border-blue-500/20' : 'opacity-70'
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && !n.isRead && handleMarkRead(n.id)}
+                  className={`flex items-start gap-4 p-4 bg-white border rounded-xl transition-all cursor-pointer hover:shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
+                    !n.isRead ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'
                   }`}
+                  aria-label={`${n.isRead ? '' : 'Unread: '}${n.title}`}
                 >
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                    !n.isRead ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'
-                  }`}>
-                    <Icon className="w-5 h-5" />
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${iconStyle}`}>
+                    <Icon className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-medium text-white">{n.title}</p>
-                      {!n.isRead && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0" />}
+                      <p className="text-sm font-semibold text-gray-900">{n.title}</p>
+                      {!n.isRead && <span className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" aria-hidden="true" />}
                     </div>
-                    <p className="text-sm text-gray-400">{n.message}</p>
-                    <p className="text-xs text-gray-600 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                    <p className="text-sm text-gray-600">{n.message}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
-          </AnimatePresence>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
