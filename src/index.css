@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS VARIABLES ─────────────────────────── */
+:root {
+  --primary: 230 80% 56%;
+  --primary-foreground: 0 0% 100%;
+  --background: 222 47% 6%;
+  --foreground: 0 0% 95%;
+}
+
+/* ─── BASE STYLES ───────────────────────────── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── SCROLLBAR ─────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ─── GLASS EFFECTS ─────────────────────────── */
+@layer components {
+  .glass-panel {
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl;
+  }
+  .glass-card {
+    @apply rounded-xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-md transition-all duration-300 hover:border-white/[0.15];
+  }
+}
+
+/* ─── SELECTION ─────────────────────────────── */
+::selection {
+  background: hsl(var(--primary) / 0.3);
+  color: white;
+}
+
+/* ─── DATE AND TIME INPUT FIXES FOR DARK THEME */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+/* ─── ANIMATE PULSE SLOWER ──────────────────── */
+.animate-pulse {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
