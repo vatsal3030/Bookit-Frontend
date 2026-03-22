@@ -25,7 +25,11 @@ export default function Messages() {
 
   useEffect(() => {
     const fetch = async () => {
-      try { const r = await api.get('/messages/conversations'); setConversations(r.data.conversations || []); }
+      try { 
+        const r = await api.get('/messages/conversations'); 
+        const uniqueConversations = Array.from(new Map((r.data.conversations || []).map((c: any) => [c.id, c])).values());
+        setConversations(uniqueConversations as any[]); 
+      }
       catch {} finally { setLoadingChats(false); }
     };
     fetch();
@@ -39,7 +43,12 @@ export default function Messages() {
       if (loader) setLoadingMessages(true);
       try {
         const r = await api.get(`/messages/conversations/${activeChatId}/messages`);
-        setMessages(prev => { if (prev.length !== r.data.messages.length) setTimeout(scrollBottom, 100); return r.data.messages; });
+        setMessages(prev => { 
+          const combined = [...prev, ...r.data.messages];
+          const uniqueMessages = Array.from(new Map(combined.map((m: any) => [m.id, m])).values());
+          if (prev.length !== uniqueMessages.length) setTimeout(scrollBottom, 100); 
+          return uniqueMessages.sort((a: any, b: any) => +new Date(a.createdAt) - +new Date(b.createdAt)); 
+        });
       } catch {} finally { setLoadingMessages(false); }
     };
     fetch(true);
@@ -57,7 +66,10 @@ export default function Messages() {
     setMessageText('');
     try {
       const r = await api.post(`/messages/conversations/${activeChatId}/messages`, { content: txt });
-      setMessages(p => [...p, r.data.message]);
+      setMessages(p => {
+        const combined = [...p, r.data.message];
+        return Array.from(new Map(combined.map((m: any) => [m.id, m])).values()).sort((a: any, b: any) => +new Date(a.createdAt) - +new Date(b.createdAt));
+      });
       setConversations(p => p.map(c => c.id === activeChatId ? { ...c, lastMessage: r.data.message, updatedAt: r.data.message.createdAt } : c).sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)));
       setTimeout(scrollBottom, 50);
     } catch { showToast('Failed to send message', 'error'); setMessageText(txt); }

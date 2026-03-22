@@ -6,7 +6,7 @@ import { StatsSkeleton, ListSkeleton } from '../../components/ui/skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
-import { Calendar, DollarSign, Star, Clock, Briefcase, Settings, TrendingUp, ArrowRight } from 'lucide-react';
+import { Calendar, DollarSign, Star, Clock, Briefcase, Settings, TrendingUp, ArrowRight, Tag } from 'lucide-react';
 
 function StatCard({ label, value, icon: Icon, color }: any) {
   return (
@@ -39,14 +39,19 @@ export default function ProviderDashboard() {
         setStats(res.data.stats);
         setRecentAppointments(res.data.recentAppointments || []);
         setAnalytics(analyticsRes.data.analytics || []);
-      } catch {
-        showToast('Failed to load dashboard', 'error');
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          showToast('Please complete your Business Profile setup.', 'info');
+          navigate('/dashboard/profile');
+        } else {
+          showToast('Failed to load dashboard', 'error');
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchStats();
-  }, [showToast]);
+  }, [showToast, navigate]);
 
   const maxRevenue = useMemo(() => {
     if (!analytics.length) return 0;
@@ -73,7 +78,10 @@ export default function ProviderDashboard() {
             <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
             <p className="text-sm text-gray-500 mt-0.5">Welcome back, {user?.name}!</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => navigate('/dashboard/promocodes')}>
+              <Tag className="w-4 h-4" /> Promo Codes
+            </Button>
             <Button variant="outline" onClick={() => navigate('/dashboard/services')}>
               <Briefcase className="w-4 h-4" /> Services
             </Button>

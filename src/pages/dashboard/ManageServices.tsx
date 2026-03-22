@@ -13,6 +13,13 @@ export default function ManageServices() {
   const [editing, setEditing] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', category: '', duration: 30, baseFee: 0, tax: 0 });
+  
+  // Addon Modal State
+  const [addonModalOpen, setAddonModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [addonForm, setAddonForm] = useState({ name: '', description: '', price: 0, duration: 15 });
+  const [savingAddon, setSavingAddon] = useState(false);
+
   const { showToast } = useToast();
 
   const fetchServices = async () => {
@@ -52,6 +59,43 @@ export default function ManageServices() {
     catch (err: any) { showToast(err.response?.data?.error || 'Failed to remove', 'error'); }
   };
 
+  const openAddons = (s: any) => {
+    setSelectedService(s);
+    setAddonForm({ name: '', description: '', price: 0, duration: 15 });
+    setAddonModalOpen(true);
+  };
+
+  const handleSaveAddon = async () => {
+    if (!addonForm.name || addonForm.price < 0) { showToast('Please enter a valid name and price', 'error'); return; }
+    setSavingAddon(true);
+    try {
+      await api.post(`/providers/services/${selectedService.id}/addons`, addonForm);
+      showToast('Add-on created!', 'success');
+      setAddonForm({ name: '', description: '', price: 0, duration: 15 });
+      // Fetch services will refresh everything, including nestled add-ons
+      await fetchServices();
+      // Also update selected local service to show the new AddOn immediately:
+      const updatedSvc = (await api.get('/auth/profile')).data.user?.providerProfile?.services.find((sx: any) => sx.id === selectedService.id);
+      setSelectedService(updatedSvc);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to save add-on', 'error');
+    } finally {
+      setSavingAddon(false);
+    }
+  };
+
+  const handleDeleteAddon = async (addonId: string) => {
+    try {
+      await api.delete(`/providers/addons/${addonId}`);
+      showToast('Add-on deleted', 'success');
+      await fetchServices();
+      const updatedSvc = (await api.get('/auth/profile')).data.user?.providerProfile?.services.find((sx: any) => sx.id === selectedService.id);
+      setSelectedService(updatedSvc);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to delete add-on', 'error');
+    }
+  };
+
   return (
     <div className="pt-16 min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -87,10 +131,17 @@ export default function ManageServices() {
                   </div>
                 </div>
                 {s.description && <p className="text-sm text-gray-500 mb-3">{s.description}</p>}
-                <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-4 text-sm mb-4">
                   <span className="flex items-center gap-1 text-blue-600 font-bold"><DollarSign className="w-4 h-4" />₹{s.baseFee}</span>
                   <span className="flex items-center gap-1 text-gray-400"><Clock className="w-4 h-4" />{s.duration} min</span>
                   {s.tax > 0 && <span className="text-gray-400">+₹{s.tax} tax</span>}
+                </div>
+                
+                <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
+                  <span className="text-xs text-gray-500 font-medium">Add-ons: {s.addOns?.length || 0}</span>
+                  <Button variant="outline" size="sm" onClick={() => openAddons(s)}>
+                    Manage Add-ons
+                  </Button>
                 </div>
               </div>
             ))}
@@ -113,6 +164,56 @@ export default function ManageServices() {
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="ghost" onClick={() => { setModalOpen(false); resetForm(); }}>Cancel</Button>
               <Button variant="primary" loading={saving} onClick={handleSave}>{editing ? 'Update' : 'Add Service'}</Button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Add-ons Modal */}
+        <Modal 
+          isOpen={addonModalOpen} 
+          onClose={() => setAddonModalOpen(false)} 
+          title={`Manage Add-ons: ${selectedService?.name}`}
+        >
+          <div className="space-y-6">
+            {/* List Existing Addons */}
+            {selectedService?.addOns?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">Current Add-ons</h4>
+                {selectedService.addOns.map((addon: any) => (
+                  <div key={addon.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{addon.name}</p>
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                        <span className="text-emerald-600 font-semibold">+₹{addon.price}</span>
+                        <span>•</span>
+                        <span>+{addon.duration} min</span>
+                      </div>
+                    </div>
+                    <button onClick={() => handleDeleteAddon(addon.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-md transition-colors shadow-sm border border-transparent hover:border-red-100">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Create New Addon */}
+            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 space-y-4">
+              <h4 className="text-sm font-semibold text-blue-900">Create New Add-on</h4>
+              <Input label="Name *" value={addonForm.name} onChange={e => setAddonForm({ ...addonForm, name: e.target.value })} placeholder="e.g. Extra deep cleaning" />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Extra Price (₹) *" type="number" value={addonForm.price} onChange={e => setAddonForm({ ...addonForm, price: Number(e.target.value) })} />
+                <Input label="Extra Time (min)" type="number" value={addonForm.duration} onChange={e => setAddonForm({ ...addonForm, duration: Number(e.target.value) })} />
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button variant="primary" loading={savingAddon} onClick={handleSaveAddon} className="w-full sm:w-auto">
+                  <Plus className="w-4 h-4 mr-1" /> Add Option
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex justify-end pt-2 border-t border-gray-100">
+              <Button variant="ghost" onClick={() => setAddonModalOpen(false)}>Done</Button>
             </div>
           </div>
         </Modal>

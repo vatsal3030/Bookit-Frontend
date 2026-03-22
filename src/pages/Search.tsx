@@ -17,7 +17,22 @@ L.Icon.Default.mergeOptions({
 });
 
 const userIcon = new L.Icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3204/3204010.png', iconSize: [30, 30], iconAnchor: [15, 30] });
-const providerIcon = new L.Icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', iconSize: [30, 30], iconAnchor: [15, 30] });
+
+const categoryIcons: Record<string, string> = {
+  'Healthcare': 'https://cdn-icons-png.flaticon.com/512/2966/2966327.png',
+  'Beauty & Wellness': 'https://cdn-icons-png.flaticon.com/512/1940/1940922.png',
+  'Home Services': 'https://cdn-icons-png.flaticon.com/512/1009/1009033.png',
+  'Education': 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
+  'Fitness': 'https://cdn-icons-png.flaticon.com/512/2548/2548596.png',
+  'Legal': 'https://cdn-icons-png.flaticon.com/512/5759/5759606.png',
+  'Finance': 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png',
+  'Other': 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+};
+
+const getProviderIcon = (category?: string) => {
+  const url = category && categoryIcons[category] ? categoryIcons[category] : categoryIcons['Other'];
+  return new L.Icon({ iconUrl: url, iconSize: [30, 30], iconAnchor: [15, 30] });
+};
 
 const ALL_CATEGORIES = ['All', 'Healthcare', 'Beauty & Wellness', 'Home Services', 'Education', 'Fitness', 'Legal', 'Finance', 'Other'];
 const defaultCenter = { lat: 23.0225, lng: 72.5714 };
@@ -40,6 +55,8 @@ export default function Search() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
   const [viewMode, setViewMode] = useState<'split' | 'map' | 'list'>('split');
+  const [sortBy, setSortBy] = useState('distance'); // 'distance' | 'rating'
+  const [maxDistance, setMaxDistance] = useState(50); // km
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
@@ -58,21 +75,24 @@ export default function Search() {
     } else { setUserLocation(defaultCenter); setMapCenter(defaultCenter); }
   }, []);
 
-  useEffect(() => {
-    const fetchProviders = async () => {
-      setLoading(true);
-      try {
-        const params: any = {};
-        if (userLocation) { params.lat = userLocation.lat; params.lng = userLocation.lng; }
-        if (activeCategory !== 'All') params.category = activeCategory;
-        if (query) params.q = query;
-        const res = await api.get('/search/providers', { params });
-        setProviders(res.data.providers || res.data || []);
-      } catch { showToast('Failed to load providers', 'error'); }
-      finally { setLoading(false); }
-    };
-    fetchProviders();
-  }, [activeCategory, userLocation, showToast]);
+  const fetchProviders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: any = {};
+      if (userLocation) { params.lat = userLocation.lat; params.lng = userLocation.lng; }
+      if (activeCategory !== 'All') params.category = activeCategory;
+      if (query) params.q = query;
+      params.sortBy = sortBy;
+      params.maxDistance = maxDistance;
+      const res = await api.get('/search/providers', { params });
+      setProviders(res.data.providers || res.data || []);
+    } catch { showToast('Failed to load providers', 'error'); }
+    finally { setLoading(false); }
+  }, [userLocation, activeCategory, query, sortBy, maxDistance, showToast]);
+
+  useEffect(() => { fetchProviders(); }, [fetchProviders]);
+
+  const handleSearch = () => fetchProviders();
 
   const filtered = query
     ? providers.filter(p =>
@@ -80,19 +100,6 @@ export default function Search() {
         (p.services || []).some((s: any) => s.name?.toLowerCase().includes(query.toLowerCase()) || s.category?.toLowerCase().includes(query.toLowerCase()))
       )
     : providers;
-
-  const handleSearch = useCallback(() => {
-    // Trigger re-fetch by briefly toggling loading
-    setLoading(true);
-    const params: any = {};
-    if (userLocation) { params.lat = userLocation.lat; params.lng = userLocation.lng; }
-    if (activeCategory !== 'All') params.category = activeCategory;
-    if (query) params.q = query;
-    api.get('/search/providers', { params })
-      .then(res => setProviders(res.data.providers || res.data || []))
-      .catch(() => showToast('Failed to load providers', 'error'))
-      .finally(() => setLoading(false));
-  }, [query, activeCategory, userLocation, showToast]);
 
   const MapSection = useMemo(() => (
     <MapContainer
@@ -115,7 +122,7 @@ export default function Search() {
       {filtered.map(provider => {
         if (!provider.lat || !provider.lng) return null;
         return (
-          <Marker key={`m-${provider.id}`} position={[provider.lat, provider.lng]} icon={providerIcon}>
+          <Marker key={`m-${provider.id}`} position={[provider.lat, provider.lng]} icon={getProviderIcon(provider.category || provider?.services?.[0]?.category)}>
             <Popup>
               <div className="p-1 text-gray-900 min-w-[180px]">
                 <h4 className="font-bold text-sm mb-1">{provider.businessName || provider.user?.name}</h4>
@@ -215,6 +222,40 @@ export default function Search() {
           </div>
         </div>
 
+        {/* Deep Filters Row */}
+        {viewMode !== 'map' && (
+          <div className="flex items-center gap-4 mb-6 bg-white p-3 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-500">Sort by:</span>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="text-xs border-gray-300 rounded focus:ring-blue-500 bg-gray-50 py-1 pl-2 pr-6"
+              >
+                <option value="distance">Nearest to me</option>
+                <option value="rating">Highest Rated</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2 flex-1 max-w-[200px]">
+              <span className="text-xs font-medium text-gray-500 whitespace-nowrap">Radius:</span>
+              <select
+                value={maxDistance}
+                onChange={e => setMaxDistance(parseInt(e.target.value))}
+                className="w-full text-xs border border-gray-300 rounded focus:ring-blue-500 bg-gray-50 py-1 pl-2 pr-6 appearance-none cursor-pointer"
+              >
+                <option value={5}>5 km</option>
+                <option value={10}>10 km</option>
+                <option value={25}>25 km</option>
+                <option value={50}>50 km</option>
+                <option value={100}>100 km</option>
+                <option value={500}>500 km</option>
+                <option value={2000}>2000 km</option>
+                <option value={50000}>Anywhere</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Results */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -226,8 +267,19 @@ export default function Search() {
           <>
             {/* Full Map View */}
             {viewMode === 'map' && (
-              <div className="h-[calc(100vh-280px)] min-h-[400px] rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                {MapSection}
+              <div className="fixed inset-0 z-[100] bg-white flex flex-col overflow-hidden">
+                <div className="bg-white border-b border-gray-200 px-4 py-3 shadow-sm z-10 flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                     <Map className="w-5 h-5 text-blue-600" />
+                     <h2 className="font-bold text-gray-900 text-lg">Interactive Map Discovery</h2>
+                   </div>
+                   <Button variant="outline" size="sm" onClick={() => setViewMode('split')}>
+                     Exit Map
+                   </Button>
+                </div>
+                <div className="flex-1 w-full h-full relative z-0">
+                  {MapSection}
+                </div>
               </div>
             )}
 

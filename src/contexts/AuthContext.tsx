@@ -23,6 +23,7 @@ interface AuthContextType {
   googleLogin: (googleData: any) => Promise<User>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
+  switchRole: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,12 +41,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setToken(savedToken);
         setUser(JSON.parse(savedUser));
+        
+        // Background cache re-hydration resolving Role & Profile desyncs
+        api.get('/auth/profile').then(res => {
+          if (res.data?.user) {
+            setUser(res.data.user);
+            localStorage.setItem('user', JSON.stringify(res.data.user));
+          }
+        }).catch(() => {
+          // Keep local storage defaults if network fails temporarily
+        });
       } catch {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
     }
     setIsLoading(false);
+
+    const handleStorageChange = (e: StorageEvent) => {
+      // If token changed in another tab, reload to sync State bounds (prevents 403s on mismatched roles)
+      if (e.key === 'token') {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const saveSession = (userData: User, tokenStr: string) => {
@@ -91,11 +111,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const switchRole = async () => {
+    const res = await api.post('/auth/switch-role');
+    saveSession(res.data.user, res.data.token);
+  };
+
   return (
     <AuthContext.Provider value={{
       user, token, isLoading,
       isAuthenticated: !!token && !!user,
-      login, register, googleLogin, logout, refreshProfile,
+      login, register, googleLogin, logout, refreshProfile, switchRole
     }}>
       {children}
     </AuthContext.Provider>

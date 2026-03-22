@@ -96,7 +96,8 @@ export default function Payment() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-600">{appointment.service?.name}</span><span className="text-gray-900">₹{appointment.service?.baseFee || appointment.amount}</span></div>
                 {appointment.service?.tax > 0 && <div className="flex justify-between"><span className="text-gray-400">Tax</span><span className="text-gray-600">₹{appointment.service.tax}</span></div>}
-                <div className="flex justify-between pt-2 border-t border-gray-100"><span className="font-medium text-gray-900">Total</span><span className="text-xl font-bold text-blue-600">₹{appointment.amount}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Platform Fee (2%)</span><span className="text-gray-600">₹{Math.ceil(appointment.amount * 0.02)}</span></div>
+                <div className="flex justify-between pt-2 border-t border-gray-100"><span className="font-medium text-gray-900">Total</span><span className="text-xl font-bold text-blue-600">₹{appointment.amount + Math.ceil(appointment.amount * 0.02)}</span></div>
               </div>
               <div className="mt-3 flex gap-3 text-xs text-gray-400">
                 <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(appointment.timeSlot?.date || appointment.createdAt).toLocaleDateString()}</span>
@@ -132,7 +133,7 @@ export default function Payment() {
 
           <Button variant="primary" className="w-full h-12 text-base" onClick={handlePayment} loading={processing}>
             <ShieldCheck className="w-5 h-5" />
-            {method === 'PAYLATER' ? 'Confirm Pay Later' : `Pay ₹${appointment?.amount || 0} Securely`}
+            {method === 'PAYLATER' ? 'Confirm Pay Later' : `Pay ₹${appointment ? appointment.amount + Math.ceil(appointment.amount * 0.02) : 0} Securely`}
           </Button>
           <p className="mt-3 text-center text-xs text-gray-400 flex items-center justify-center gap-1">
             <ShieldCheck className="w-3 h-3" /> Your payment information is encrypted and secure

@@ -131,6 +131,16 @@ export default function Appointments() {
     }
   };
 
+  const handleMarkCompleted = async (id: string) => {
+    try {
+      await api.patch(`/appointments/${id}/complete`);
+      showToast('Appointment marked as completed!', 'success');
+      fetchAppointments();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to mark completed', 'error');
+    }
+  };
+
   return (
     <div className="pt-16 min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -201,7 +211,10 @@ export default function Appointments() {
               </div>
             ) : (
               <div className="space-y-3">
-                {appointments.map(appt => (
+                {appointments.map(appt => {
+                  const isPast = appt.timeSlot?.startTime ? new Date(appt.timeSlot.startTime) < new Date() : false;
+                  
+                  return (
                   <div
                     key={appt.id}
                     className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 hover:shadow-sm transition-all"
@@ -216,6 +229,9 @@ export default function Appointments() {
                           <Badge status={appt.status} />
                           {appt.confirmationNo && (
                             <span className="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">#{appt.confirmationNo}</span>
+                          )}
+                          {isPast && ['PENDING', 'CONFIRMED'].includes(appt.status) && (
+                            <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">Overdue</span>
                           )}
                         </div>
                         <p className="text-xs sm:text-sm text-gray-500 mb-2">
@@ -253,18 +269,26 @@ export default function Appointments() {
                             <Star className="w-3.5 h-3.5" /> Review
                           </Button>
                         )}
-                        {['PENDING', 'CONFIRMED'].includes(appt.status) && appt.rescheduleAllowed !== false && (
+                        {['PENDING', 'CONFIRMED'].includes(appt.status) && appt.rescheduleAllowed !== false && !isPast && (
                           <Button variant="outline" size="sm" onClick={() => setRescheduleModal(appt)}>
                             <RefreshCw className="w-3.5 h-3.5" /> Reschedule
                           </Button>
                         )}
-                        {['PENDING', 'CONFIRMED'].includes(appt.status) && (
+                        {['PENDING', 'CONFIRMED'].includes(appt.status) && !isPast && (
                           <Button variant="danger" size="sm" onClick={() => setCancelModal(appt.id)}>Cancel</Button>
+                        )}
+                        {['PENDING', 'CONFIRMED'].includes(appt.status) && isPast && user?.role === 'PROVIDER' && (
+                          <Button variant="primary" size="sm" onClick={() => handleMarkCompleted(appt.id)}>Complete</Button>
+                        )}
+                        {['PENDING', 'CONFIRMED'].includes(appt.status) && isPast && user?.role === 'CUSTOMER' && (
+                          <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 shadow-sm flex items-center">
+                            Awaiting Provider
+                          </span>
                         )}
                       </div>
                     </div>
                   </div>
-                ))}
+                 )})}
 
                 {/* Pagination */}
                 {pagination && pagination.totalPages > 1 && (

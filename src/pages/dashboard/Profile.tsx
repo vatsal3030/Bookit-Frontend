@@ -4,7 +4,19 @@ import { Input } from '../../components/ui/input';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
-import { User, Phone, MapPin, Save, Camera } from 'lucide-react';
+import { User, Phone, MapPin, Save, Camera, Navigation } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix leaflet marker icon resolution issues
+// @ts-ignore
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+// @ts-ignore
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+// @ts-ignore
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+L.Icon.Default.mergeOptions({ iconRetinaUrl, iconUrl, shadowUrl });
 
 const CATEGORIES = ['Healthcare', 'Beauty & Wellness', 'Home Services', 'Education', 'Fitness', 'Legal', 'Finance', 'Other'];
 
@@ -13,7 +25,8 @@ export default function Profile() {
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', contactNo: '', location: '' });
-  const [providerForm, setProviderForm] = useState({ businessName: '', description: '', category: '', address: '' });
+  const [providerForm, setProviderForm] = useState({ businessName: '', description: '', category: '', address: '', lat: 20.5937, lng: 78.9629 });
+  const [geocoding, setGeocoding] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -22,7 +35,7 @@ export default function Profile() {
     if (user?.role === 'PROVIDER') {
       api.get('/auth/profile').then(res => {
         const pp = res.data.user?.providerProfile;
-        if (pp) setProviderForm({ businessName: pp.businessName || '', description: pp.description || '', category: pp.category || '', address: pp.address || '' });
+        if (pp) setProviderForm({ businessName: pp.businessName || '', description: pp.description || '', category: pp.category || '', address: pp.address || '', lat: pp.lat || 20.5937, lng: pp.lng || 78.9629 });
       }).catch(() => {});
     }
   }, [user]);
@@ -46,7 +59,44 @@ export default function Profile() {
   const setProvider = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setProviderForm(p => ({ ...p, [k]: e.target.value }));
 
+  const handleGeocoding = async () => {
+    if (!providerForm.address) {
+      showToast('Please enter an address to detect coordinates.', 'error');
+      return;
+    }
+    setGeocoding(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(providerForm.address)}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        setProviderForm(p => ({ ...p, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }));
+        showToast('Location detected successfully!', 'success');
+      } else {
+        showToast('Could not find exact coordinates for this address.', 'error');
+      }
+    } catch (err) {
+      showToast('Geocoding service unavailable.', 'error');
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
   const initials = (user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+  function LocationMarker() {
+    useMapEvents({
+      click(e) { setProviderForm(p => ({ ...p, lat: e.latlng.lat, lng: e.latlng.lng })); },
+    });
+    return <Marker position={[providerForm.lat, providerForm.lng]} />;
+  }
+
+  function MapRecenter({ lat, lng }: { lat: number; lng: number }) {
+    const map = useMap();
+    useEffect(() => {
+      map.flyTo([lat, lng], 14, { animate: true, duration: 1.5 });
+    }, [lat, lng, map]);
+    return null;
+  }
 
   return (
     <div className="pt-16 min-h-screen bg-gray-50">
@@ -112,7 +162,26 @@ export default function Profile() {
                   className="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
-              <Input label="Business address" value={providerForm.address} onChange={setProvider('address')} placeholder="Street, City, State" icon={<MapPin className="w-4 h-4" />} />
+              <div>
+                <Input label="Business address" value={providerForm.address} onChange={setProvider('address')} placeholder="Street, City, State" icon={<MapPin className="w-4 h-4" />} />
+                <div className="flex justify-end mt-2">
+                  <Button variant="outline" size="sm" onClick={handleGeocoding} loading={geocoding} disabled={!providerForm.address}>
+                    <MapPin className="w-3.5 h-3.5 mr-1" /> Auto-Detect Coordinates
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="mt-4">
+                <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Navigation className="w-4 h-4" /> Pinpoint Location</label>
+                <div className="h-[250px] w-full rounded-xl overflow-hidden border border-gray-200 shadow-inner z-0">
+                  <MapContainer center={[providerForm.lat, providerForm.lng]} zoom={providerForm.lat === 20.5937 ? 4 : 13} style={{ height: '100%', width: '100%', zIndex: 0 }}>
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
+                    <LocationMarker />
+                    <MapRecenter lat={providerForm.lat} lng={providerForm.lng} />
+                  </MapContainer>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Click on the map to set your exact service location. This helps customers find you.</p>
+              </div>
             </div>
           </div>
         )}

@@ -30,17 +30,20 @@ export default function ManageSlots() {
   // Add slot modal
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '' });
+  const [form, setForm] = useState({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '', autoDivide: false, durationMin: 30 });
 
-  // Fetch provider profile
+  const [providerId, setProviderId] = useState<string | null>(null);
+
+  // Fetch provider profile & services securely
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get('/providers/dashboard/stats');
-        setProvider(res.data.stats);
-        // also fetch services
-        const profileRes = await api.get(`/providers/${res.data.stats?.providerId || ''}`);
-        setServices(profileRes.data.provider?.services || []);
+        const res = await api.get('/auth/profile');
+        const prof = res.data.user?.providerProfile;
+        if (prof) {
+          setProviderId(prof.id);
+          setServices(prof.services || []);
+        }
       } catch {}
       setLoading(false);
     })();
@@ -48,18 +51,14 @@ export default function ManageSlots() {
 
   // Fetch slots for selected date
   const fetchSlots = useCallback(async () => {
-    if (!selectedDate) return;
+    if (!selectedDate || !providerId) return;
     setLoading(true);
     try {
-      // We need the provider ID - get it from stats
-      const statsRes = await api.get('/providers/dashboard/stats');
-      const pid = statsRes.data.stats?.providerId;
-      if (!pid) { setLoading(false); return; }
-      const res = await api.get(`/providers/${pid}/slots`, { params: { date: selectedDate } });
+      const res = await api.get(`/providers/${providerId}/slots`, { params: { date: selectedDate } });
       setSlots(res.data.slots || []);
     } catch { setSlots([]); }
     finally { setLoading(false); }
-  }, [selectedDate]);
+  }, [selectedDate, providerId]);
 
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
 
@@ -69,17 +68,49 @@ export default function ManageSlots() {
     try {
       const start = new Date(`${selectedDate}T${form.startTime}`);
       const end = new Date(`${selectedDate}T${form.endTime}`);
-      await api.post('/providers/slots', {
-        date: selectedDate,
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-        title: form.title || undefined,
-        description: form.description || undefined,
-        serviceId: form.serviceId || undefined,
-      });
-      showToast('Slot added!', 'success');
+
+      if (form.autoDivide && form.durationMin > 0) {
+        let current = start.getTime();
+        const durationMs = form.durationMin * 60 * 1000;
+        const slotsToCreate = [];
+        
+        while (current + durationMs <= end.getTime()) {
+           const slotEnd = current + durationMs;
+           slotsToCreate.push({
+             startTime: new Date(current).toISOString(),
+             endTime: new Date(slotEnd).toISOString(),
+             title: form.title || undefined,
+             description: form.description || undefined,
+           });
+           current = slotEnd;
+        }
+        
+        if (slotsToCreate.length === 0) {
+           showToast('Block too small for duration', 'error');
+           setCreating(false);
+           return;
+        }
+        
+        await api.post('/providers/slots/bulk', {
+          date: selectedDate,
+          serviceId: form.serviceId || undefined,
+          slots: slotsToCreate,
+        });
+        showToast(`Created ${slotsToCreate.length} slots!`, 'success');
+      } else {
+        await api.post('/providers/slots', {
+          date: selectedDate,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          title: form.title || undefined,
+          description: form.description || undefined,
+          serviceId: form.serviceId || undefined,
+        });
+        showToast('Slot added!', 'success');
+      }
+
       setShowModal(false);
-      setForm({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '' });
+      setForm({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '', autoDivide: false, durationMin: 30 });
       fetchSlots();
     } catch (err: any) { showToast(err.response?.data?.error || 'Failed to add slot', 'error'); }
     finally { setCreating(false); }
@@ -245,6 +276,16 @@ export default function ManageSlots() {
               />
             </div>
           </div>
+          <div className="flex items-center gap-2 mb-2">
+            <input type="checkbox" id="autoDivide" checked={form.autoDivide} onChange={e => setForm(f => ({ ...f, autoDivide: e.target.checked }))} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            <label htmlFor="autoDivide" className="text-sm text-gray-700 font-medium">Auto-divide block into multiple slots</label>
+          </div>
+          {form.autoDivide && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duration per slot (minutes)</label>
+              <input type="number" min="5" value={form.durationMin} onChange={e => setForm(f => ({ ...f, durationMin: parseInt(e.target.value) || 30 }))} className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          )}
           <Input
             label="Title (optional)"
             placeholder="e.g. Morning Consultation"

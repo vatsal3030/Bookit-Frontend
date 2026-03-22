@@ -3,10 +3,11 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Search, LayoutDashboard, LogOut, User, Shield,
-  ChevronDown, Building2, MessageSquare, Plus, Check, Bell, Receipt
+  ChevronDown, Building2, MessageSquare, Plus, Check, Bell, Receipt, Menu, X, RefreshCw
 } from 'lucide-react';
 import api from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { useToast } from '../../components/ui/toast';
 
 // ─── Multi-Account Helpers ────────────────────────────────
 interface SavedAccount { id: string; name: string; email: string; avatar?: string; role: string; token: string; }
@@ -24,11 +25,13 @@ function removeSavedAccount(id: string) {
 
 // ─── Navbar ───────────────────────────────────────────────
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
@@ -56,9 +59,23 @@ export default function Navbar() {
   const markAllAsRead = async () => {
     try {
       await api.patch('/notifications/read-all');
-      setUnreadCount(0);
       setNotifications(notifications.map(n => ({ ...n, isRead: true })));
-    } catch {}
+      setUnreadCount(0);
+    } catch {
+      showToast('Failed to mark all as read', 'error');
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await api.delete('/notifications/clear-all');
+      setNotifications([]);
+      setUnreadCount(0);
+      setNotifOpen(false);
+      showToast('Notifications cleared');
+    } catch {
+      showToast('Failed to clear notifications', 'error');
+    }
   };
 
   const markAsRead = async (id: string) => {
@@ -66,7 +83,9 @@ export default function Navbar() {
       await api.patch(`/notifications/${id}/read`);
       setUnreadCount(Math.max(0, unreadCount - 1));
       setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch {}
+    } catch {
+      showToast('Failed to mark notification as read', 'error');
+    }
   };
 
   // Close menus on outside click / Escape
@@ -86,12 +105,27 @@ export default function Navbar() {
     return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', handler); };
   }, []);
 
+  const handleSwitchRole = async () => {
+    try {
+      await switchRole();
+      window.location.href = '/dashboard';
+    } catch {
+      showToast('Failed to switch role', 'error');
+    }
+  };
+
   const handleLogout = () => {
     if (user) removeSavedAccount(user.id);
     logout();
     setMenuOpen(false);
     navigate('/');
     setAccounts(getSavedAccounts());
+  };
+
+  const handleAddAccount = () => {
+    logout(); // Clear active session but keep saved ones
+    setMenuOpen(false);
+    navigate('/login');
   };
 
   const handleSwitchAccount = (acc: SavedAccount) => {
@@ -120,20 +154,31 @@ export default function Navbar() {
       aria-label="Main navigation"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-4">
-        {/* Brand */}
-        <Link
-          to="/"
-          className="flex items-center gap-2 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
-          aria-label="Bookit — go to home"
-        >
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-            <Building2 className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900 tracking-tight">Bookit</span>
-        </Link>
+        
+        {/* Left Side: Mobile Menu Button & Logo */}
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button 
+            className="sm:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open mobile menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <Link
+            to="/"
+            className="flex items-center gap-2 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+            aria-label="Bookit — go to home"
+          >
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+              <Building2 className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold text-gray-900 tracking-tight">Bookit</span>
+          </Link>
+        </div>
 
         {/* Nav Links */}
-        <div className="flex items-center gap-1">
+        <div className="hidden sm:flex items-center gap-1">
           {navLinks.map(link => {
             if (link.auth && !user) return null;
             const Icon = link.icon;
@@ -170,8 +215,9 @@ export default function Navbar() {
               <span className="hidden sm:inline">Admin</span>
             </Link>
           )}
+        </div>
 
-          {/* Auth: Guest */}
+        {/* Auth: Guest */}
           {!user && (
             <div className="flex items-center gap-2 ml-2">
               <Link
@@ -209,11 +255,18 @@ export default function Navbar() {
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg animate-fadeIn z-50">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                       <h3 className="font-semibold text-gray-900">Notifications</h3>
-                      {unreadCount > 0 && (
-                        <button onClick={markAllAsRead} className="text-xs text-blue-600 font-medium hover:text-blue-700">
-                          Mark all read
-                        </button>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {unreadCount > 0 && (
+                          <button onClick={markAllAsRead} className="text-xs text-blue-600 font-medium hover:text-blue-700 transition-colors">
+                            Mark all read
+                          </button>
+                        )}
+                        {notifications.length > 0 && (
+                          <button onClick={clearAllNotifications} className="text-xs text-red-600 font-medium hover:text-red-700 transition-colors">
+                            Clear all
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto">
                       {notifications.length === 0 ? (
@@ -237,6 +290,13 @@ export default function Navbar() {
                         </div>
                       )}
                     </div>
+                    {notifications.length > 0 && (
+                      <div className="p-3 border-t border-gray-100 bg-gray-50 text-center rounded-b-xl">
+                        <Link to="/dashboard/notifications" onClick={() => setNotifOpen(false)} className="text-sm text-blue-600 font-medium hover:text-blue-700">
+                          View all notifications
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -322,12 +382,13 @@ export default function Navbar() {
                   </div>
 
                   {/* Saved Accounts */}
-                  {accounts.filter(a => a.id !== user.id).length > 0 && (
-                    <>
-                      <div className="border-t border-gray-100 px-4 pt-2 pb-1">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Switch Account</p>
-                      </div>
-                      <div className="pb-1" role="group">
+                  <div className="border-t border-gray-100 px-4 pt-3 pb-2">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Switch Account</p>
+                  </div>
+                  
+                  <div className="pb-1" role="group">
+                    {accounts.filter(a => a.id !== user.id).length > 0 && (
+                      <div className="mb-1">
                         {accounts
                           .filter(a => a.id !== user.id)
                           .map(acc => (
@@ -337,34 +398,46 @@ export default function Navbar() {
                               onClick={() => handleSwitchAccount(acc)}
                               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
                             >
-                              <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
                                 {acc.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{acc.name}</p>
-                                <p className="text-xs text-gray-400 truncate">{acc.email}</p>
+                                <p className="font-medium text-gray-900 truncate">{acc.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{acc.email}</p>
                               </div>
                             </button>
                           ))}
-                        <Link
-                          to="/login"
-                          role="menuitem"
-                          onClick={() => setMenuOpen(false)}
-                          className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add another account
-                        </Link>
                       </div>
-                    </>
-                  )}
+                    )}
+                    
+                    <button
+                      role="menuitem"
+                      onClick={handleAddAccount}
+                      className="flex items-center gap-3 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50 transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-gray-400" />
+                      Add Account
+                    </button>
+                  </div>
+
+                  {/* Switch Role */}
+                  <div className="border-t border-gray-100 py-1">
+                    <button
+                      role="menuitem"
+                      onClick={handleSwitchRole}
+                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4 text-gray-400" />
+                      Switch to {user.role === 'CUSTOMER' ? 'Provider' : 'Customer'}
+                    </button>
+                  </div>
 
                   {/* Logout */}
                   <div className="border-t border-gray-100 py-1">
                     <button
                       role="menuitem"
                       onClick={handleLogout}
-                      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
                       Sign out
@@ -376,8 +449,80 @@ export default function Navbar() {
 
             </div>
           )}
-        </div>
       </div>
+
+      {/* Mobile Sidebar */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[100] flex sm:hidden">
+          {/* Overlay */}
+          <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={() => setMobileMenuOpen(false)} />
+          
+          {/* Sidebar */}
+          <div className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col animate-slideInLeft">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <span className="text-lg font-bold text-gray-900 tracking-tight">Menu</span>
+              <button 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 flex flex-col gap-2 overflow-y-auto">
+              {navLinks.map(link => {
+                if (link.auth && !user) return null;
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors",
+                      isActive(link.to)
+                        ? "text-blue-700 bg-blue-50"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-blue-600"
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                    {link.label}
+                  </Link>
+                );
+              })}
+              
+              {user?.role === 'ADMIN' && (
+                <Link
+                  to="/admin/dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium mt-2",
+                    isActive('/admin')
+                      ? "text-red-700 bg-red-50"
+                      : "text-red-600 hover:bg-red-50"
+                  )}
+                >
+                  <Shield className="w-5 h-5" />
+                  Admin
+                </Link>
+              )}
+            </div>
+            
+            {!user && (
+              <div className="p-4 border-t border-gray-100 mt-auto">
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign in
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
