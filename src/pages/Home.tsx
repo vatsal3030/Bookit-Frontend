@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Search, Star, Shield, Clock, Calendar, ChevronRight, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import SEO from '../components/SEO';
 
 const CATEGORIES = [
   { name: 'Healthcare', icon: '🏥', desc: 'Doctors, dentists, therapists' },
@@ -30,8 +31,10 @@ export default function Home() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <div className="pt-16 bg-white">
-      {/* Hero */}
+    <>
+      <SEO />
+      <div className="pt-16 bg-white">
+        {/* Hero */}
       <section className="bg-white border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-700 font-medium mb-6">
@@ -161,5 +164,6 @@ export default function Home() {
         </div>
       </footer>
     </div>
+    </>
   );
 }

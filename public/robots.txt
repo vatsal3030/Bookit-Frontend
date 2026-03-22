@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Point to the unified backend sitemap generator
+# If your backend is hosted on a different URL, replace the domain below.
+Sitemap: https://backend.bookit.vixora.co.in/api/sitemap.xml

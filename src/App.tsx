@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './components/ui/toast';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
+import { HelmetProvider } from 'react-helmet-async';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Pages
@@ -26,8 +27,9 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 
 function App() {
   return (
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AuthProvider>
+    <HelmetProvider>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AuthProvider>
         <ToastProvider>
           <div className="min-h-screen flex flex-col">
             <Navbar />
@@ -63,8 +65,9 @@ function App() {
             <Footer />
           </div>
         </ToastProvider>
-      </AuthProvider>
-    </Router>
+        </AuthProvider>
+      </Router>
+    </HelmetProvider>
   );
 }
 

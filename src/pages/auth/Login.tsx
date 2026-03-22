@@ -7,6 +7,7 @@ import { useToast } from '../../components/ui/toast';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { getServerRoot } from '../../lib/api';
+import SEO from '../../components/SEO';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -60,8 +61,10 @@ function LoginForm() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <>
+      <SEO title="Sign In" description="Login to your Bookit account to manage your bookings and services." />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 group">
@@ -160,6 +163,7 @@ function LoginForm() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

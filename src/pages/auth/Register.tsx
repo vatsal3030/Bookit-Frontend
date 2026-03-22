@@ -6,6 +6,7 @@ import { useToast } from '../../components/ui/toast';
 import { useState, useEffect } from 'react';
 import { Mail, Lock, User, Phone, Eye, EyeOff, Building2 } from 'lucide-react';
 import api from '../../lib/api';
+import SEO from '../../components/SEO';
 
 export default function Register() {
   const { register: authRegister, isAuthenticated } = useAuth();
@@ -58,8 +59,10 @@ export default function Register() {
   const CATEGORIES = ['Healthcare', 'Beauty & Wellness', 'Home Services', 'Education', 'Fitness', 'Legal', 'Finance', 'Other'];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <>
+      <SEO title="Create an Account" description="Join Bookit today to book or provide local services instantly." />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
@@ -172,5 +175,6 @@ export default function Register() {
         </div>
       </div>
     </div>
+    </>
   );
 }

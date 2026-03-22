@@ -10,6 +10,7 @@ import {
   Star, MapPin, Clock, DollarSign, Calendar, ChevronLeft, ChevronRight,
   ShieldCheck, Loader2, Check, MessageSquare, Info
 } from 'lucide-react';
+import SEO from '../../components/SEO';
 
 // ─── Calendar Helpers ─────────────────────────────────────
 function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
@@ -184,8 +185,14 @@ export default function ProviderProfile() {
   const todayStr = toDateStr(today);
 
   return (
-    <div className="pt-16 min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <>
+      <SEO 
+        title={provider.businessName || provider.user.name} 
+        description={`Book professional ${provider.category || 'services'} with ${provider.businessName || provider.user.name}. Browse available time slots and book instantly on Bookit.`} 
+        keywords={`${provider.businessName || provider.user.name}, ${provider.category || 'services'}, bookit, ${provider.services?.map((s:any)=>s.name).join(', ')}`}
+      />
+      <div className="pt-16 min-h-screen bg-gray-50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Back */}
         <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-gray-400 hover:text-gray-700 mb-4 text-sm transition-colors" aria-label="Go back">
           <ChevronLeft className="w-4 h-4" /> Back to search
@@ -477,5 +484,6 @@ export default function ProviderProfile() {
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import SEO from '../components/SEO';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -138,8 +139,10 @@ export default function Search() {
   ), [mapKey, mapCenter, userLocation, filtered, navigate]);
 
   return (
-    <div className="pt-16 min-h-screen bg-gray-50 pb-12">
-      {/* Hero Section */}
+    <>
+      <SEO title="Find Services" description="Search and discover the best local service providers near you on Bookit." />
+      <div className="pt-16 min-h-screen bg-gray-50 pb-12">
+        {/* Hero Section */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 text-center">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">
@@ -368,5 +371,6 @@ export default function Search() {
         )}
       </div>
     </div>
+    </>
   );
 }
