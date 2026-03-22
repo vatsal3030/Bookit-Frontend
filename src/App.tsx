@@ -16,6 +16,7 @@ import Payment from './pages/checkout/Payment';
 import ProviderDashboard from './pages/dashboard/ProviderDashboard';
 import ManageServices from './pages/dashboard/ManageServices';
 import ManageSlots from './pages/dashboard/ManageSlots';
+import ManageStaff from './pages/dashboard/ManageStaff';
 import PromoCodes from './pages/dashboard/PromoCodes';
 import Profile from './pages/dashboard/Profile';
 import Messages from './pages/dashboard/Messages';
@@ -53,6 +54,7 @@ function App() {
                 <Route path="/dashboard/services" element={<ProtectedRoute requiredRole="PROVIDER"><ManageServices /></ProtectedRoute>} />
                 <Route path="/dashboard/slots" element={<ProtectedRoute requiredRole="PROVIDER"><ManageSlots /></ProtectedRoute>} />
                 <Route path="/dashboard/promocodes" element={<ProtectedRoute requiredRole="PROVIDER"><PromoCodes /></ProtectedRoute>} />
+                <Route path="/dashboard/staff" element={<ProtectedRoute requiredRole="ORGANIZATION"><ManageStaff /></ProtectedRoute>} />
 
                 {/* Protected - Admin only */}
                 <Route path="/admin/dashboard" element={<ProtectedRoute requiredRole="ADMIN"><AdminDashboard /></ProtectedRoute>} />

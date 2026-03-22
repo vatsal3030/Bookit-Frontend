@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
-import { CreditCard, Smartphone, Wallet, Clock, ShieldCheck, Loader2, CheckCircle, XCircle, Calendar } from 'lucide-react';
+import { CreditCard, Smartphone, Wallet, Clock, ShieldCheck, Loader2, CheckCircle, XCircle, Calendar, Eye, EyeOff } from 'lucide-react';
 
 const METHODS = [
   { value: 'CARD', label: 'Credit Card', icon: CreditCard },
@@ -22,6 +22,7 @@ export default function Payment() {
   const [method, setMethod] = useState('CARD');
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<'success' | 'failed' | null>(null);
+  const [showCVC, setShowCVC] = useState(false);
 
   useEffect(() => {
     const fetchAppt = async () => {
@@ -125,7 +126,15 @@ export default function Payment() {
           {method === 'CARD' && (
             <div className="space-y-3 mb-6">
               <Input placeholder="Card Number (4242 4242 4242 4242)" />
-              <div className="flex gap-3"><Input placeholder="MM/YY" className="w-1/2" /><Input placeholder="CVC" type="password" className="w-1/2" /></div>
+              <div className="flex gap-3">
+                <Input placeholder="MM/YY" className="w-1/2" />
+                <div className="relative w-1/2">
+                  <Input placeholder="CVC" type={showCVC ? 'text' : 'password'} className="w-full pr-10" />
+                  <button type="button" onClick={() => setShowCVC(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showCVC ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
               <Input placeholder="Cardholder Name" />
             </div>
           )}

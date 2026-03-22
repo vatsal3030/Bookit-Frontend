@@ -73,8 +73,10 @@ export default function ProviderProfile() {
     api.get(`/providers/${id}/slots`, { params: { date: startDate, endDate } })
       .then(res => {
         const dates = new Set<string>();
+        const now = Date.now();
         (res.data.slots || []).forEach((s: any) => {
-          if (s.isAvailable) dates.add(toDateStr(new Date(s.startTime)));
+          const slotTime = new Date(s.startTime).getTime();
+          if (s.isAvailable && slotTime > now) dates.add(toDateStr(new Date(s.startTime)));
         });
         setAvailableDates(dates);
       })
@@ -86,7 +88,11 @@ export default function ProviderProfile() {
     if (!selectedDate || !id) return;
     setSlotsLoading(true);
     api.get(`/providers/${id}/slots`, { params: { date: selectedDate } })
-      .then(res => setSlots(res.data.slots || []))
+      .then(res => {
+        const now = Date.now();
+        const validSlots = (res.data.slots || []).filter((s: any) => s.isAvailable && new Date(s.startTime).getTime() > now);
+        setSlots(validSlots);
+      })
       .catch(() => setSlots([]))
       .finally(() => setSlotsLoading(false));
   }, [selectedDate, id]);

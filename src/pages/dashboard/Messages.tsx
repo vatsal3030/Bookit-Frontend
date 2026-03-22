@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Send, MessageSquare, Loader2, ArrowLeft, Check, CheckCheck } from 'lucide-react';
+import { Search, Send, MessageSquare, Loader2, ArrowLeft, Check, CheckCheck, Info } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
@@ -20,6 +20,7 @@ export default function Messages() {
   const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showSidebar, setShowSidebar] = useState(!activeChatId);
+  const [canReply, setCanReply] = useState(true);
 
   useEffect(() => { setShowSidebar(!activeChatId); }, [activeChatId]);
 
@@ -43,6 +44,7 @@ export default function Messages() {
       if (loader) setLoadingMessages(true);
       try {
         const r = await api.get(`/messages/conversations/${activeChatId}/messages`);
+        if (typeof r.data.canReply === 'boolean') setCanReply(r.data.canReply);
         setMessages(prev => { 
           const combined = [...prev, ...r.data.messages];
           const uniqueMessages = Array.from(new Map(combined.map((m: any) => [m.id, m])).values());
@@ -198,26 +200,32 @@ export default function Messages() {
                 </div>
 
                 {/* Input */}
-                <div className="p-3 bg-white border-t border-gray-200 flex-shrink-0">
-                  <form onSubmit={handleSend} className="flex gap-2 items-center">
-                    <input
-                      type="text"
-                      value={messageText}
-                      onChange={e => setMessageText(e.target.value)}
-                      placeholder="Type a message..."
-                      className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
-                      disabled={sending}
-                    />
-                    <button
-                      type="submit"
-                      disabled={!messageText.trim() || sending}
-                      className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors flex-shrink-0"
-                      aria-label="Send message"
-                    >
-                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    </button>
-                  </form>
-                </div>
+                {canReply ? (
+                  <div className="p-3 bg-white border-t border-gray-200 flex-shrink-0">
+                    <form onSubmit={handleSend} className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={messageText}
+                        onChange={e => setMessageText(e.target.value)}
+                        placeholder="Type a message..."
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
+                        disabled={sending}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!messageText.trim() || sending}
+                        className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors flex-shrink-0"
+                        aria-label="Send message"
+                      >
+                        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gray-50 border-t border-gray-200 text-center text-sm text-gray-500 flex-shrink-0 flex items-center justify-center gap-2">
+                     <Info className="w-4 h-4 text-gray-400" /> You can only message users you have a pending or future appointment with.
+                  </div>
+                )}
               </>
             )}
           </div>

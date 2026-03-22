@@ -6,7 +6,7 @@ interface User {
   name: string;
   email: string;
   avatar?: string;
-  role: 'CUSTOMER' | 'PROVIDER' | 'ADMIN';
+  role: 'CUSTOMER' | 'PROVIDER' | 'ADMIN' | 'ORGANIZATION';
   contactNo?: string;
   location?: string;
   isVerified: boolean;

@@ -6,7 +6,7 @@ import { StatsSkeleton, ListSkeleton } from '../../components/ui/skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
-import { Calendar, DollarSign, Star, Clock, Briefcase, Settings, TrendingUp, ArrowRight, Tag } from 'lucide-react';
+import { Calendar, DollarSign, Star, Clock, Briefcase, Settings, TrendingUp, ArrowRight, Tag, Users } from 'lucide-react';
 
 function StatCard({ label, value, icon: Icon, color }: any) {
   return (
@@ -85,6 +85,11 @@ export default function ProviderDashboard() {
             <Button variant="outline" onClick={() => navigate('/dashboard/services')}>
               <Briefcase className="w-4 h-4" /> Services
             </Button>
+            {user?.role === 'ORGANIZATION' && (
+              <Button variant="outline" onClick={() => navigate('/dashboard/staff')}>
+                <Users className="w-4 h-4" /> Team
+              </Button>
+            )}
             <Button variant="primary" onClick={() => navigate('/dashboard/slots')}>
               <Settings className="w-4 h-4" /> Manage Slots
             </Button>

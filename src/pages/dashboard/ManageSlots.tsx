@@ -17,6 +17,7 @@ export default function ManageSlots() {
   const { showToast } = useToast();
   const [provider, setProvider] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export default function ManageSlots() {
   // Add slot modal
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '', autoDivide: false, durationMin: 30 });
+  const [form, setForm] = useState({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '', staffId: '', autoDivide: false, durationMin: 30 });
 
   const [providerId, setProviderId] = useState<string | null>(null);
 
@@ -43,6 +44,7 @@ export default function ManageSlots() {
         if (prof) {
           setProviderId(prof.id);
           setServices(prof.services || []);
+          setStaffList(prof.teamMembers || []);
         }
       } catch {}
       setLoading(false);
@@ -94,6 +96,7 @@ export default function ManageSlots() {
         await api.post('/providers/slots/bulk', {
           date: selectedDate,
           serviceId: form.serviceId || undefined,
+          staffId: form.staffId || undefined,
           slots: slotsToCreate,
         });
         showToast(`Created ${slotsToCreate.length} slots!`, 'success');
@@ -105,12 +108,13 @@ export default function ManageSlots() {
           title: form.title || undefined,
           description: form.description || undefined,
           serviceId: form.serviceId || undefined,
+          staffId: form.staffId || undefined,
         });
         showToast('Slot added!', 'success');
       }
 
       setShowModal(false);
-      setForm({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '', autoDivide: false, durationMin: 30 });
+      setForm({ startTime: '09:00', endTime: '10:00', title: '', description: '', serviceId: '', staffId: '', autoDivide: false, durationMin: 30 });
       fetchSlots();
     } catch (err: any) { showToast(err.response?.data?.error || 'Failed to add slot', 'error'); }
     finally { setCreating(false); }
@@ -233,6 +237,7 @@ export default function ManageSlots() {
                         {slot.title && <p className="text-xs font-medium text-gray-700 flex items-center gap-1"><Tag className="w-3 h-3 text-gray-400" /> {slot.title}</p>}
                         {slot.description && <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><AlignLeft className="w-3 h-3" /> {slot.description}</p>}
                         {slot.service && <p className="text-[10px] text-blue-600 mt-0.5">Service: {slot.service.name}</p>}
+                        {slot.staff && <p className="text-[10px] text-purple-600 mt-0.5 font-medium">Assigned: {slot.staff.name}</p>}
                       </div>
                       {slot.isAvailable && (
                         <button
@@ -313,6 +318,21 @@ export default function ManageSlots() {
                 <option value="">— General availability —</option>
                 {services.map(s => (
                   <option key={s.id} value={s.id}>{s.name} (₹{s.baseFee})</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {staffList.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Assign to Staff Member (optional)</label>
+              <select
+                value={form.staffId}
+                onChange={e => setForm(f => ({ ...f, staffId: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— Unassigned (Provider) —</option>
+                {staffList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} {s.role ? `(${s.role})` : ''}</option>
                 ))}
               </select>
             </div>

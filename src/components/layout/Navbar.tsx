@@ -48,6 +48,13 @@ export default function Navbar() {
     setAccounts(getSavedAccounts());
   }, [user]);
 
+  // Real-time polling fallback
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(fetchNotifications, 15000); // Check every 15s
+    return () => clearInterval(interval);
+  }, [user]);
+
   const fetchNotifications = async () => {
     try {
       const { data } = await api.get('/notifications');
@@ -274,18 +281,22 @@ export default function Navbar() {
                       ) : (
                         <div className="divide-y divide-gray-100">
                           {notifications.map(n => (
-                            <div 
+                            <Link 
                               key={n.id} 
-                              onClick={() => !n.isRead && markAsRead(n.id)}
+                              to={n.link || '/dashboard/appointments'}
+                              onClick={(e) => {
+                                if (!n.isRead) markAsRead(n.id);
+                                setNotifOpen(false);
+                              }}
                               className={cn(
-                                "px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer",
+                                "block px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer",
                                 !n.isRead && "bg-blue-50/50"
                               )}
                             >
                               <p className="text-sm font-medium text-gray-900">{n.title}</p>
                               <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">{n.message}</p>
                               <p className="text-xs text-gray-400 mt-2">{new Date(n.createdAt).toLocaleDateString()}</p>
-                            </div>
+                            </Link>
                           ))}
                         </div>
                       )}
@@ -428,7 +439,7 @@ export default function Navbar() {
                       className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <RefreshCw className="w-4 h-4 text-gray-400" />
-                      Switch to {user.role === 'CUSTOMER' ? 'Provider' : 'Customer'}
+                      {user.role === 'CUSTOMER' ? 'Become a Provider' : user.role === 'PROVIDER' ? 'Upgrade to Organization' : 'Switch to Customer'}
                     </button>
                   </div>
 

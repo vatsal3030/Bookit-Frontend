@@ -117,9 +117,29 @@ export default function Profile() {
           <div>
             <p className="font-semibold text-gray-900 text-lg">{user?.name}</p>
             <p className="text-sm text-gray-500">{user?.email}</p>
-            <span className="mt-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-              {user?.role}
-            </span>
+            <div className="flex items-center gap-3 mt-1.5">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                {user?.role}
+              </span>
+              {(user?.role === 'CUSTOMER' || user?.role === 'PROVIDER') && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm(user?.role === 'CUSTOMER' ? 'Are you sure you want to become a Service Provider?' : 'Upgrade to Organization? This will unlock staff-level parallel slots.')) {
+                      setSaving(true);
+                      await api.put('/auth/switch-role')
+                        .then((res) => {
+                          localStorage.setItem('token', res.data.token);
+                          window.location.reload();
+                        }).catch(() => showToast('Upgrade failed', 'error')).finally(() => setSaving(false));
+                    }
+                  }}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-800 underline decoration-blue-200 underline-offset-2 transition-colors disabled:opacity-50"
+                  disabled={saving}
+                >
+                  {user?.role === 'CUSTOMER' ? 'Become a Provider' : 'Upgrade to Organization'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

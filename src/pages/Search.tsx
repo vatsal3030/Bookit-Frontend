@@ -94,12 +94,7 @@ export default function Search() {
 
   const handleSearch = () => fetchProviders();
 
-  const filtered = query
-    ? providers.filter(p =>
-        (p.user?.name || p.businessName || '').toLowerCase().includes(query.toLowerCase()) ||
-        (p.services || []).some((s: any) => s.name?.toLowerCase().includes(query.toLowerCase()) || s.category?.toLowerCase().includes(query.toLowerCase()))
-      )
-    : providers;
+  const filtered = providers; // Filter logic is now safely handled natively via Backend (searchController.ts)
 
   const MapSection = useMemo(() => (
     <MapContainer
