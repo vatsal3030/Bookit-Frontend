@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
@@ -25,6 +26,7 @@ export default function Notifications() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const fetchNotifications = async () => {
     try {
@@ -90,7 +92,10 @@ export default function Notifications() {
               return (
                 <div
                   key={n.id}
-                  onClick={() => !n.isRead && handleMarkRead(n.id)}
+                  onClick={() => {
+                    if (!n.isRead) handleMarkRead(n.id);
+                    if (n.link) navigate(n.link);
+                  }}
                   role="button"
                   tabIndex={0}
                   onKeyDown={e => e.key === 'Enter' && !n.isRead && handleMarkRead(n.id)}

@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '../components/ui/button';
 import { SearchIcon, MapPin, Star, SlidersHorizontal, Navigation, ArrowRight, Map, List, Loader2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../lib/api';
+import api, { deduplicatedGet } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import SEO from '../components/SEO';
@@ -52,6 +52,7 @@ export default function Search() {
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
@@ -60,6 +61,14 @@ export default function Search() {
   const [maxDistance, setMaxDistance] = useState(50); // km
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce the query so API calls fire 400ms after the user stops typing
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedQuery(query), 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
   const { showToast } = useToast();
 
   // Stable key for MapContainer to prevent _leaflet_pos crash on re-render
@@ -82,18 +91,18 @@ export default function Search() {
       const params: any = {};
       if (userLocation) { params.lat = userLocation.lat; params.lng = userLocation.lng; }
       if (activeCategory !== 'All') params.category = activeCategory;
-      if (query) params.q = query;
+      if (debouncedQuery) params.q = debouncedQuery;
       params.sortBy = sortBy;
       params.maxDistance = maxDistance;
-      const res = await api.get('/search/providers', { params });
-      setProviders(res.data.providers || res.data || []);
+      const res = await deduplicatedGet('/search/providers', params);
+      setProviders((res as any).providers || res || []);
     } catch { showToast('Failed to load providers', 'error'); }
     finally { setLoading(false); }
-  }, [userLocation, activeCategory, query, sortBy, maxDistance, showToast]);
+  }, [userLocation, activeCategory, debouncedQuery, sortBy, maxDistance, showToast]);
 
   useEffect(() => { fetchProviders(); }, [fetchProviders]);
 
-  const handleSearch = () => fetchProviders();
+  const handleSearch = () => { setDebouncedQuery(query); };
 
   const filtered = providers; // Filter logic is now safely handled natively via Backend (searchController.ts)
 
@@ -232,6 +241,8 @@ export default function Search() {
               >
                 <option value="distance">Nearest to me</option>
                 <option value="rating">Highest Rated</option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
               </select>
             </div>
             <div className="flex items-center gap-2 flex-1 max-w-[200px]">

@@ -38,7 +38,8 @@ export default function Payments() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-fadeIn">
+    <div className="pt-16 min-h-screen bg-gray-50">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6 animate-fadeIn">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Payment History</h1>
         <p className="mt-1 text-sm text-gray-500">View and manage your past transactions.</p>
@@ -110,6 +111,7 @@ export default function Payments() {
           </table>
         </div>
       </div>
+    </div>
     </div>
   );
 }
