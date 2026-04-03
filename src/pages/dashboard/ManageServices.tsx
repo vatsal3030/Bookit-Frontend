@@ -157,9 +157,9 @@ export default function ManageServices() {
               <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="Brief description" className="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Input label="Price (₹) *" type="number" value={form.baseFee} onChange={e => setForm({ ...form, baseFee: Number(e.target.value) })} />
-              <Input label="Tax (₹)" type="number" value={form.tax} onChange={e => setForm({ ...form, tax: Number(e.target.value) })} />
-              <Input label="Duration (min)" type="number" value={form.duration} onChange={e => setForm({ ...form, duration: Number(e.target.value) })} />
+              <Input label="Price (₹) *" value={form.baseFee === 0 ? '' : form.baseFee} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setForm({ ...form, baseFee: val === '' ? 0 : Number(val) }) }} placeholder="0" />
+              <Input label="Tax (₹)" value={form.tax === 0 ? '' : form.tax} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setForm({ ...form, tax: val === '' ? 0 : Number(val) }) }} placeholder="0" />
+              <Input label="Duration (min)" value={form.duration === 0 ? '' : form.duration} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setForm({ ...form, duration: val === '' ? 0 : Number(val) }) }} placeholder="30" />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="ghost" onClick={() => { setModalOpen(false); resetForm(); }}>Cancel</Button>
@@ -202,8 +202,8 @@ export default function ManageServices() {
               <h4 className="text-sm font-semibold text-blue-900">Create New Add-on</h4>
               <Input label="Name *" value={addonForm.name} onChange={e => setAddonForm({ ...addonForm, name: e.target.value })} placeholder="e.g. Extra deep cleaning" />
               <div className="grid grid-cols-2 gap-3">
-                <Input label="Extra Price (₹) *" type="number" value={addonForm.price} onChange={e => setAddonForm({ ...addonForm, price: Number(e.target.value) })} />
-                <Input label="Extra Time (min)" type="number" value={addonForm.duration} onChange={e => setAddonForm({ ...addonForm, duration: Number(e.target.value) })} />
+                <Input label="Extra Price (₹) *" value={addonForm.price === 0 ? '' : addonForm.price} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setAddonForm({ ...addonForm, price: val === '' ? 0 : Number(val) }) }} placeholder="0" />
+                <Input label="Extra Time (min)" value={addonForm.duration === 0 ? '' : addonForm.duration} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setAddonForm({ ...addonForm, duration: val === '' ? 0 : Number(val) }) }} placeholder="15" />
               </div>
               <div className="flex justify-end pt-2">
                 <Button variant="primary" loading={savingAddon} onClick={handleSaveAddon} className="w-full sm:w-auto">

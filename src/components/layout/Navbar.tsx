@@ -58,7 +58,19 @@ export default function Navbar() {
   const fetchNotifications = async () => {
     try {
       const { data } = await api.get('/notifications');
-      setNotifications(data.notifications);
+      
+      // Check for new notifications to show as toast
+      setNotifications(prev => {
+        if (prev.length > 0) {
+          const newNotifs = data.notifications.filter((n: any) => 
+            !n.isRead && !prev.find((p: any) => p.id === n.id)
+          );
+          newNotifs.forEach((n: any) => {
+            showToast(n.title, 'success');
+          });
+        }
+        return data.notifications;
+      });
       setUnreadCount(data.unreadCount);
     } catch {}
   };

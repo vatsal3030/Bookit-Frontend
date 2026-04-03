@@ -1,17 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import { useToast } from '../../components/ui/toast';
 import api from '../../lib/api';
-import { CreditCard, Smartphone, Wallet, Clock, ShieldCheck, Loader2, CheckCircle, XCircle, Calendar, Eye, EyeOff } from 'lucide-react';
-
-const METHODS = [
-  { value: 'CARD', label: 'Credit Card', icon: CreditCard },
-  { value: 'UPI', label: 'UPI App', icon: Smartphone },
-  { value: 'WALLET', label: 'Wallet', icon: Wallet },
-  { value: 'PAYLATER', label: 'Pay Later', icon: Clock },
-];
+import { ShieldCheck, Loader2, CheckCircle, XCircle, Calendar } from 'lucide-react';
 
 export default function Payment() {
   const { id } = useParams();
@@ -19,10 +11,8 @@ export default function Payment() {
   const { showToast } = useToast();
   const [appointment, setAppointment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [method, setMethod] = useState('CARD');
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<'success' | 'failed' | null>(null);
-  const [showCVC, setShowCVC] = useState(false);
 
   useEffect(() => {
     const fetchAppt = async () => {
@@ -33,14 +23,82 @@ export default function Payment() {
     if (id) fetchAppt();
   }, [id]);
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) { resolve(true); return; }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handlePayment = async () => {
+    if (!id) return;
     setProcessing(true);
+
     try {
-      const res = await api.post('/payments/process', { appointmentId: id, method });
-      if (res.data.payment.status === 'SUCCESS') { setResult('success'); showToast('Payment successful!', 'success'); }
-      else { setResult('success'); showToast('Payment pending — Pay Later applied.', 'info'); }
-    } catch (err: any) { setResult('failed'); showToast(err.response?.data?.error || 'Payment failed', 'error'); }
-    finally { setProcessing(false); }
+      const res = await loadRazorpayScript();
+      if (!res) {
+        showToast('Razorpay SDK failed to load. Are you online?', 'error');
+        setProcessing(false);
+        return;
+      }
+
+      // 1. Create order on our backend
+      const orderRes = await api.post('/payments/create-order', { appointmentId: id });
+      const { orderId, amount, currency, keyId } = orderRes.data;
+
+      // 2. Initialize Razorpay Checkout
+      const options = {
+        key: keyId, 
+        amount: amount * 100, // in paise
+        currency: currency,
+        name: 'Bookit',
+        description: appointment?.service?.name || 'Appointment Payment',
+        order_id: orderId,
+        handler: async function (response: any) {
+          try {
+            // 3. Verify payment signature on backend
+            const verifyRes = await api.post('/payments/verify', {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              appointmentId: id,
+            });
+
+            if (verifyRes.data.success) {
+              setResult('success');
+              showToast('Payment successful!', 'success');
+            }
+          } catch (err: any) {
+            setResult('failed');
+            showToast('Payment verification failed. Please contact support.', 'error');
+          }
+        },
+        prefill: {
+          name: appointment?.customer?.name || '',
+          email: appointment?.customer?.email || '',
+        },
+        theme: {
+          color: '#2563EB',
+        },
+        modal: {
+          ondismiss: function() {
+            setProcessing(false);
+            showToast('Payment cancelled', 'info');
+          }
+        }
+      };
+
+      const paymentObject = new (window as any).Razorpay(options);
+      paymentObject.open();
+
+    } catch (err: any) {
+      setProcessing(false);
+      showToast(err.response?.data?.error || 'Failed to initiate payment', 'error');
+    }
   };
 
   if (loading) return <div className="pt-16 min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
@@ -87,7 +145,7 @@ export default function Payment() {
     <div className="pt-16 min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
       <div className="max-w-xl w-full">
         <h1 className="text-2xl font-bold text-gray-900 text-center mb-1">Secure Checkout</h1>
-        <p className="text-sm text-gray-500 text-center mb-6">Complete your booking securely</p>
+        <p className="text-sm text-gray-500 text-center mb-6">Complete your booking securely with Razorpay</p>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
           {/* Order Summary */}
@@ -107,45 +165,12 @@ export default function Payment() {
             </div>
           )}
 
-          {/* Payment Methods */}
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Payment Method</h3>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {METHODS.map(m => (
-              <button
-                key={m.value}
-                onClick={() => setMethod(m.value)}
-                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${method === m.value ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}
-              >
-                <m.icon className="w-6 h-6 mb-2" />
-                <span className="text-sm font-medium">{m.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Card Details */}
-          {method === 'CARD' && (
-            <div className="space-y-3 mb-6">
-              <Input placeholder="Card Number (4242 4242 4242 4242)" />
-              <div className="flex gap-3">
-                <Input placeholder="MM/YY" className="w-1/2" />
-                <div className="relative w-1/2">
-                  <Input placeholder="CVC" type={showCVC ? 'text' : 'password'} className="w-full pr-10" />
-                  <button type="button" onClick={() => setShowCVC(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showCVC ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-              <Input placeholder="Cardholder Name" />
-            </div>
-          )}
-          {method === 'UPI' && <div className="mb-6"><Input placeholder="UPI ID (e.g., user@paytm)" /></div>}
-
           <Button variant="primary" className="w-full h-12 text-base" onClick={handlePayment} loading={processing}>
             <ShieldCheck className="w-5 h-5" />
-            {method === 'PAYLATER' ? 'Confirm Pay Later' : `Pay ₹${appointment ? appointment.amount + Math.ceil(appointment.amount * 0.02) : 0} Securely`}
+            Pay ₹{appointment ? appointment.amount + Math.ceil(appointment.amount * 0.02) : 0} securely
           </Button>
-          <p className="mt-3 text-center text-xs text-gray-400 flex items-center justify-center gap-1">
-            <ShieldCheck className="w-3 h-3" /> Your payment information is encrypted and secure
+          <p className="mt-4 text-center text-xs text-gray-400 flex items-center justify-center gap-1">
+            <ShieldCheck className="w-3 h-3" /> Payments are processed securely by Razorpay
           </p>
         </div>
       </div>

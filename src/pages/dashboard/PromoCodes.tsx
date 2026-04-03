@@ -200,9 +200,9 @@ export default function PromoCodes() {
               </div>
               <Input 
                 label="Discount Amount *" 
-                type="number" 
-                value={form.discountValue} 
-                onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} 
+                value={form.discountValue === 0 ? '' : form.discountValue} 
+                onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setForm({ ...form, discountValue: val === '' ? 0 : Number(val) }) }} 
+                placeholder="10"
               />
             </div>
 

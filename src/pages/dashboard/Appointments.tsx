@@ -18,10 +18,13 @@ export default function Appointments() {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [view, setView] = useState<'appointments' | 'analytics'>('appointments');
+  const { user } = useAuth();
+  const [viewMode, setViewMode] = useState<'customer' | 'provider'>(
+    user?.role === 'PROVIDER' || user?.role === 'ORGANIZATION' ? 'provider' : 'customer'
+  );
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<any>(null);
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { showToast } = useToast();
 
   // Cancel modal
@@ -46,7 +49,7 @@ export default function Appointments() {
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = { page, limit: 15 };
+      const params: any = { page, limit: 15, mode: viewMode };
       if (activeFilter !== 'All') params.status = activeFilter;
       const res = await api.get('/appointments', { params });
       setAppointments(res.data.appointments || []);
@@ -56,7 +59,7 @@ export default function Appointments() {
     } finally {
       setLoading(false);
     }
-  }, [page, activeFilter]);
+  }, [page, activeFilter, viewMode]);
 
   useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
 
@@ -147,10 +150,28 @@ export default function Appointments() {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Appointments</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {viewMode === 'provider' ? 'Incoming Bookings' : 'My Appointments'}
+            </h1>
             <p className="text-sm text-gray-500 mt-0.5">{pagination?.total || appointments.length} total</p>
           </div>
           <div className="flex gap-2">
+            {['PROVIDER', 'ORGANIZATION'].includes(user?.role || '') && (
+              <div className="flex gap-1 p-1 bg-white border border-gray-200 rounded-lg">
+                <button
+                  onClick={() => { setViewMode('provider'); setPage(1); }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'provider' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  Incoming
+                </button>
+                <button
+                  onClick={() => { setViewMode('customer'); setPage(1); }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'customer' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  My Own Bookings
+                </button>
+              </div>
+            )}
             {user?.role === 'CUSTOMER' && (
               <div className="flex gap-1 p-1 bg-white border border-gray-200 rounded-lg">
                 <button
